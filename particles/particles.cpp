@@ -28,26 +28,35 @@ void write_particles(std::vector<Particle>& p,const char* filename) {
 
 	std::vector<double> writebuf(p.size() * 3);
 
-	/* First, store particle positions */
-	for(unsigned int i=0; i < p.size(); i++) {
-		p[i].x.store(&(writebuf[3*i]));
-	}
 
-	std::map<std::string,std::string> attribs;
-	attribs["name"] = "proton_position";
-	attribs["type"] = vlsv::mesh::STRING_POINT;
-	if (vlsvWriter.writeArray("MESH",attribs,p.size(),3,writebuf.data()) == false) {
-		std::cerr << "\t ERROR failed to write particle positions!" << std::endl;
-	}
-
-	/* Then, velocities */
+	/* First, store particle velocities */
 	for(unsigned int i=0; i < p.size(); i++) {
 		p[i].v.store(&(writebuf[3*i]));
 	}
 
+	std::map<std::string,std::string> attribs;
+	attribs["type"] = vlsv::mesh::STRING_POINT;
 	attribs["name"] = "proton_velocity";
 	if (vlsvWriter.writeArray("MESH",attribs,p.size(),3,writebuf.data()) == false) {
 		std::cerr << "\t ERROR failed to write particle velocities!" << std::endl;
 	}
+	/* Then  positions */
+	for(unsigned int i=0; i < p.size(); i++) {
+		p[i].x.store(&(writebuf[3*i]));
+	}
+
+	attribs["name"] = "proton_position";
+	if (vlsvWriter.writeArray("MESH",attribs,p.size(),3,writebuf.data()) == false) {
+		std::cerr << "\t ERROR failed to write particle positions!" << std::endl;
+	}
+
+	/* Also write particle positions as an attribute to the velocity data */
+	attribs["name"] = "position";
+	attribs["mesh"] = "proton_velocity";
+	attribs.erase("type");
+	if (vlsvWriter.writeArray("VARIABLE",attribs,p.size(),3,writebuf.data()) == false) {
+		std::cerr << "\t ERROR faild to write position variable for velocity mesh!" << std::endl;
+	}
+
 	vlsvWriter.close();
 }
