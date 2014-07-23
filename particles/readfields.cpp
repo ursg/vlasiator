@@ -12,11 +12,9 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-std::string B_field_name;
-std::string E_field_name;
-
 /* Read the cellIDs into an array */
-std::vector<uint64_t> readCellIds(oldVlsv::Reader& r) {
+template <>
+std::vector<uint64_t> vlsvFieldReader<oldVlsv::Reader>::readCellIds(oldVlsv::Reader& r) {
 
 	uint64_t arraySize=0;
 	uint64_t vectorSize=0;
@@ -45,8 +43,8 @@ std::vector<uint64_t> readCellIds(oldVlsv::Reader& r) {
 	return cellIds;
 }
 
-std::vector<uint64_t> readCellIds(newVlsv::Reader& r) {
-
+template <>
+std::vector<uint64_t> vlsvFieldReader<newVlsv::Reader>::readCellIds(newVlsv::Reader& r) {
 	uint64_t arraySize=0;
 	uint64_t vectorSize=0;
 	uint64_t byteSize=0;
@@ -77,7 +75,8 @@ std::vector<uint64_t> readCellIds(newVlsv::Reader& r) {
 /* Read a single-valued floating point parameter
  * (there are two versions here, since in oldVlsv they were called
  * PARAMETERS, and in newVlsv PARAMETER. Otherwise identical.) */
-double readDoubleParameter(oldVlsv::Reader& r, const char* name) {
+template <>
+double vlsvFieldReader<oldVlsv::Reader>::readDoubleParameter(oldVlsv::Reader& r, const char* name) {
 	uint64_t arraySize=0;
 	uint64_t vectorSize=0;
 	uint64_t byteSize=0;
@@ -104,7 +103,8 @@ double readDoubleParameter(oldVlsv::Reader& r, const char* name) {
 	return retval;
 }
 
-double readDoubleParameter(newVlsv::Reader& r, const char* name) {
+template <>
+double vlsvFieldReader<newVlsv::Reader>::readDoubleParameter(newVlsv::Reader& r, const char* name) {
 	uint64_t arraySize=0;
 	uint64_t vectorSize=0;
 	uint64_t byteSize=0;
@@ -134,7 +134,8 @@ double readDoubleParameter(newVlsv::Reader& r, const char* name) {
 /* Read a single-valued integer parameter
  * (there are two versions here, since in oldVlsv they were called
  * PARAMETERS, and in newVlsv PARAMETER. Otherwise identical.) */
-uint32_t readUintParameter(newVlsv::Reader& r, const char* name) {
+template <>
+uint32_t vlsvFieldReader<newVlsv::Reader>::readUintParameter(newVlsv::Reader& r, const char* name) {
 	uint64_t arraySize=0;
 	uint64_t vectorSize=0;
 	uint64_t byteSize=0;
@@ -161,7 +162,8 @@ uint32_t readUintParameter(newVlsv::Reader& r, const char* name) {
 	return retval;
 }
 
-uint32_t readUintParameter(oldVlsv::Reader& r, const char* name) {
+template <>
+uint32_t vlsvFieldReader<oldVlsv::Reader>::readUintParameter(oldVlsv::Reader& r, const char* name) {
 	uint64_t arraySize=0;
 	uint64_t vectorSize=0;
 	uint64_t byteSize=0;

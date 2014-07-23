@@ -9,6 +9,8 @@ typedef ParticleParameters P;
 
 std::string P::input_filename_pattern;
 std::string P::output_filename_pattern;
+double P::input_file_step;
+double P::output_file_step;
 std::string P::mode = std::string("distribution");
 Real P::init_x = 0;
 Real P::init_y = 0;
@@ -29,6 +31,8 @@ Real P::charge = PhysicalConstantsSI::e;
 bool ParticleParameters::addParameters() {
 	Readparameters::add("particles.input_filename_pattern","Printf() like pattern giving the field input filenames.", std::string("bulk.%07i.vlsv"));
 	Readparameters::add("particles.output_filename_pattern","Printf() like pattern giving the particle output filenames.", std::string("particles.%07i.vlsv"));
+	Readparameters::add("particles.input_file_step", "Input filenames are spaced this many seconds",1);
+	Readparameters::add("particles.output_file_step", "Output filenames are spaced this many seconds",1);
 	Readparameters::add("particles.mode","Mode to run the particle pusher in.",std::string("distribution"));
 
 	Readparameters::add("particles.init_x", "Particle starting point, x-coordinate (meters).", 0);
@@ -51,6 +55,8 @@ bool ParticleParameters::addParameters() {
 bool ParticleParameters::getParameters() {
 	Readparameters::get("particles.input_filename_pattern",P::input_filename_pattern);
 	Readparameters::get("particles.output_filename_pattern",P::output_filename_pattern);
+	Readparameters::get("particles.input_file_step", P::input_file_step);
+	Readparameters::get("particles.output_file_step", P::output_file_step);
 
 	Readparameters::get("particles.mode",P::mode);
 
@@ -62,7 +68,7 @@ bool ParticleParameters::getParameters() {
 	Readparameters::get("particles.start_time",P::start_time);
 	Readparameters::get("particles.end_time",P::end_time);
 	Readparameters::get("particles.num_particles",P::num_particles);
-	if(P::dt == 0 || P::end_time <= P::start_time) {
+	if(P::dt == 0) {
 		return false;
 	}
 

@@ -40,14 +40,14 @@ int main(int argc, char** argv) {
 
 	/* Read starting fields from specified input file */
 	std::string filename_pattern = ParticleParameters::input_filename_pattern;
-	char filename_buffer[256];
-
-	/* TODO: This assumes that output is written every second. Beware. */
-	int input_file_counter=floor(ParticleParameters::start_time);
-	Field E[2],B[2],V;
-	snprintf(filename_buffer,256,filename_pattern.c_str(),input_file_counter-1);
-	readfields(filename_buffer,E[1],B[1],V);
-	E[0]=E[1]; B[0]=B[1];
+	vlsvFieldReader<newVlsv::Reader>* input;
+	if(ParticleParameters::dt < 0) {
+		input = new vlsvBackwardFieldReader<newVlsv::Reader>;
+	} else {
+		input = new vlsvForwardFieldReader<newVlsv::Reader>;
+	}
+	input->open(filename_pattern, ParticleParameters::start_time, ParticleParameters::input_file_step);
+	input->open_next_timestep(ParticleParameters::start_time);
 
 	/* Init particles */
 	std::vector<Particle> particles;
@@ -56,6 +56,8 @@ int main(int argc, char** argv) {
 	double dt=ParticleParameters::dt;
 	double maxtime=ParticleParameters::end_time - ParticleParameters::start_time;
 	int maxsteps = maxtime/dt;
+
+	Field V = input->read_velocity_field();
 
 	if(ParticleParameters::mode == "single") {
 
@@ -98,6 +100,10 @@ int main(int argc, char** argv) {
 		write_particles(particles, "particles_initial.vlsv");
 	}
 
+
+	double output_step = ParticleParameters::output_file_step;
+	double last_output_time = ParticleParameters::start_time;
+
 	std::cerr << "Pushing " << particles.size() << " particles for " << maxsteps << " steps..." << std::endl;
         std::cerr << "[                                                                        ]\x0d[";
 
@@ -106,14 +112,10 @@ int main(int argc, char** argv) {
 
 		bool newfile;
 		/* Load newer fields, if neccessary */
-		if(step >= 0) {
-			newfile = read_next_timestep(filename_pattern, ParticleParameters::start_time + step*dt, 1,E[0], E[1], B[0], B[1], input_file_counter);
-		} else {
-			newfile = read_next_timestep(filename_pattern, ParticleParameters::start_time + step*dt, -1,E[1], E[0], B[1], B[0], input_file_counter);
-		}
+		newfile = input->open_next_timestep(ParticleParameters::start_time + step*dt);
 
-		Interpolated_Field cur_E(E[0],E[1],step*dt);
-		Interpolated_Field cur_B(B[0],B[1],step*dt);
+		Interpolated_Field cur_E = input->interpolate_E(ParticleParameters::start_time+step*dt);
+		Interpolated_Field cur_B = input->interpolate_B(ParticleParameters::start_time+step*dt);
 
 		#pragma omp parallel for
 		for(unsigned int i=0; i< particles.size(); i++) {
@@ -128,9 +130,13 @@ int main(int argc, char** argv) {
 		}
 
 		/* Write output */
-		if(newfile) {
-			snprintf(filename_buffer,256, ParticleParameters::output_filename_pattern.c_str(),input_file_counter-1);
+		if(ParticleParameters::start_time + step*dt > last_output_time+output_step) {
+			char filename_buffer[256];
+			int filenum = floor(ParticleParameters::start_time+step*dt);
+			snprintf(filename_buffer,256, ParticleParameters::output_filename_pattern.c_str(),filenum);
 			write_particles(particles, filename_buffer);
+
+			last_output_time += output_step;
 		}
 
 		/* Draw progress bar */
@@ -146,6 +152,7 @@ int main(int argc, char** argv) {
 
 	std::cerr << std::endl;
 
+	delete input;
 	MPI::Finalize();
 	return 0;
 }

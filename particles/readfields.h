@@ -9,277 +9,393 @@
 #include <string>
 #include <set>
 
-extern std::string B_field_name;
-extern std::string E_field_name;
-
-/* Read the cellIDs into an array */
-std::vector<uint64_t> readCellIds(oldVlsv::Reader& r);
-std::vector<uint64_t> readCellIds(newVlsv::Reader& r);
-
 template <class Reader>
-void detect_field_names(Reader& r) {
+class vlsvFieldReader {
+protected:
+	Reader r;
+	std::vector<uint64_t> cellIds;
+	Field E[2], B[2];
+	std::string B_field_name;
+	std::string E_field_name;
+	std::string filename_pattern;
+	int input_file_counter;
+
+	/* Detect if volume-averaged fields are available */
+	void detect_field_names() {
 
 #ifdef DEBUG
-	std::cerr << "Checking for volume-averaged fields... ";
+		std::cerr << "Checking for volume-averaged fields... ";
 #endif
-	std::list<std::string> variableNames;
-	std::string gridname("SpatialGrid");
+		std::list<std::string> variableNames;
+		std::string gridname("SpatialGrid");
 
-	r.getVariableNames(gridname,variableNames);
-	if(find(variableNames.begin(), variableNames.end(), std::string("B_vol"))!=variableNames.end()) {
+		r.getVariableNames(gridname,variableNames);
+		if(find(variableNames.begin(), variableNames.end(), std::string("B_vol"))!=variableNames.end()) {
 #ifdef DEBUG
-		std::cerr << "yep!" << std::endl;
+			std::cerr << "yep!" << std::endl;
 #endif
-		B_field_name = "B_vol";
-		E_field_name = "E_vol";
-	} else if(find(variableNames.begin(), variableNames.end(), std::string("B"))!=variableNames.end()) {
+			B_field_name = "B_vol";
+			E_field_name = "E_vol";
+		} else if(find(variableNames.begin(), variableNames.end(), std::string("B"))!=variableNames.end()) {
 #ifdef DEBUG
-		std::cerr << "Nope!" << std::endl;
+			std::cerr << "Nope!" << std::endl;
 #endif
-		B_field_name = "B";
-		E_field_name = "E";
-	} else {
-		std::cerr << "No B- or E-fields found! Strange file format?" << std::endl;
-		exit(1);
-	}
-}
-
-/* Read the "raw" field data in file order */
-template <class Reader>
-std::vector<double> readFieldData(Reader& r, std::string& name, unsigned int numcomponents) {
-
-	uint64_t arraySize=0;
-	uint64_t vectorSize=0;
-	uint64_t byteSize=0;
-	vlsv::datatype::type dataType;
-	std::list<std::pair<std::string,std::string> > attribs;
-	attribs.push_back(std::pair<std::string,std::string>("name",name));
-	if( r.getArrayInfo("VARIABLE",attribs, arraySize,vectorSize,dataType,byteSize) == false ) {
-		std::cerr << "getArrayInfo returned false when trying to read VARIABLE \""
-			<< name << "\"." << std::endl;
-		exit(1);
+			B_field_name = "B";
+			E_field_name = "E";
+		} else {
+			std::cerr << "No B- or E-fields found! Strange file format?" << std::endl;
+			exit(1);
+		}
 	}
 
-	if(dataType != vlsv::datatype::type::FLOAT || byteSize != 8 || vectorSize != numcomponents) {
-		std::cerr << "Datatype of VARIABLE \"" << name << "\" entries is not double." << std::endl;
-		exit(1);
-	}
+public:
 
-	/* Allocate memory for the data */
-	std::vector<double> buffer(arraySize*vectorSize);
-	
-	if( r.readArray("VARIABLE",attribs,0,arraySize,(char*) buffer.data()) == false) {
-		std::cerr << "readArray faied when trying to read VARIABLE \"" << name << "\"." << std::endl;
-		exit(1);
-	}
+	/** Open filenames matching a given pattern
+	 *  t0: Starting time
+	 *  input_file_step: spacing between input steps (in seconds) */
+	virtual void open(const std::string& _filename_pattern, double t0=0, double input_file_step=1.)=0;
 
-	return buffer;
-}
+	/* Read certain kinds of parameters */
+	double readDoubleParameter(Reader& r, const char* name);
+	/* Read a single-valued integer parameter */
+	uint32_t readUintParameter(Reader& r, const char* name);
 
-double readDoubleParameter(newVlsv::Reader& r, const char* name);
-double readDoubleParameter(oldVlsv::Reader& r, const char* name);
+	/* Read the cellIDs into an array */
+	std::vector<uint64_t> readCellIds(oldVlsv::Reader& r);
+	std::vector<uint64_t> readCellIds(newVlsv::Reader& r);
 
-/* Read a single-valued integer parameter */
-uint32_t readUintParameter(newVlsv::Reader& r, const char* name);
-uint32_t readUintParameter(oldVlsv::Reader& r, const char* name);
+	/* Read the "raw" field data in file order */
+	std::vector<double> readFieldData(std::string& name, unsigned int numcomponents) {
 
-/* Read the next logical input file. Depending on sign of dt,
- * this may be a numerically larger or smaller file.
- * Return value: true if a new file was read, otherwise false.
- */
-template <class Reader>
-bool read_next_timestep(const std::string& filename_pattern, double t, int step, Field& E0, Field& E1,
-	Field& B0, Field& B1, int& input_file_counter) {
+			uint64_t arraySize=0;
+			uint64_t vectorSize=0;
+			uint64_t byteSize=0;
+			vlsv::datatype::type dataType;
+			std::list<std::pair<std::string,std::string> > attribs;
+			attribs.push_back(std::pair<std::string,std::string>("name",name));
+			if( r.getArrayInfo("VARIABLE",attribs, arraySize,vectorSize,dataType,byteSize) == false ) {
+				std::cerr << "getArrayInfo returned false when trying to read VARIABLE \""
+					<< name << "\"." << std::endl;
+				exit(1);
+			}
 
-	char filename_buffer[256];
-	bool retval = false;
+			if(dataType != vlsv::datatype::type::FLOAT || byteSize != 8 || vectorSize != numcomponents) {
+				std::cerr << "Datatype of VARIABLE \"" << name << "\" entries is not double." << std::endl;
+				exit(1);
+			}
 
-	while(t < E0.time || t>= E1.time) {
-		input_file_counter += step;
+			/* Allocate memory for the data */
+			std::vector<double> buffer(arraySize*vectorSize);
 
-		E0=E1;
-		B0=B1;
-		snprintf(filename_buffer,256,filename_pattern.c_str(),input_file_counter);
+			if( r.readArray("VARIABLE",attribs,0,arraySize,(char*) buffer.data()) == false) {
+				std::cerr << "readArray faied when trying to read VARIABLE \"" << name << "\"." << std::endl;
+				exit(1);
+			}
 
-		/* Open next file */
-		Reader r;
-		r.open(filename_buffer);
-		double t = readDoubleParameter(r,"t");
-		E1.time = t;
-		B1.time = t;
+			return buffer;
+		}
 
+	/* Read a field (this relies on the cellIDs having been read already) */
+	Field readField(std::string name, unsigned int numcomponents) {
+		Field f;
+		double min[3], max[3], time;
 		uint64_t cells[3];
+		min[0] = readDoubleParameter(r,"xmin");
+		min[1] = readDoubleParameter(r,"ymin");
+		min[2] = readDoubleParameter(r,"zmin");
+		max[0] = readDoubleParameter(r,"xmax");
+		max[1] = readDoubleParameter(r,"ymax");
+		max[2] = readDoubleParameter(r,"zmax");
 		cells[0] = readUintParameter(r,"xcells_ini");
 		cells[1] = readUintParameter(r,"ycells_ini");
 		cells[2] = readUintParameter(r,"zcells_ini");
+		time = readDoubleParameter(r,"t");
 
-		/* Read CellIDs and Field data */
-		std::vector<uint64_t> cellIds = readCellIds(r);
-		std::string name(B_field_name);
-		std::vector<double> Bbuffer = readFieldData(r,name,3u);
-		name = E_field_name;
-		std::vector<double> Ebuffer = readFieldData(r,name,3u);
+		f.data.resize(cells[0]*cells[1]*cells[2]*4);
 
-		/* Assign them, without sanity checking */
-		/* TODO: Is this actually a good idea? */
+		std::vector<double> buffer = readFieldData(name,numcomponents);
+
+		/* Sanity-check stored data sizes */
+		if(numcomponents*cellIds.size() != buffer.size()) {
+			std::cerr << numcomponents << " * cellIDs.size (" << cellIds.size() 
+				  << ") != buffer.size (" << buffer.size() << ") while reading "
+				  << name << "!" << std::endl;
+			exit(1);
+		}
+
+		/* Set field size */
+		for(int i=0; i<3;i++) {
+			/* Volume-centered values -> shift by half a cell in all directions*/
+			f.dx[i] = (max[i]-min[i])/cells[i];
+			double shift = f.dx[i]/2;
+			f.min[i] = min[i]+shift;
+			f.max[i] =  max[i]+shift;
+			f.cells[i] = cells[i];
+		}
+		f.time = time;
+
+		/* So, now we've got the cellIDs, the mesh size and the field values,
+		 * we can sort them into place */
 		for(uint i=0; i< cellIds.size(); i++) {
 			uint64_t c = cellIds[i];
 			int64_t x = c % cells[0];
 			int64_t y = (c /cells[0]) % cells[1];
 			int64_t z = c /(cells[0]*cells[1]);
 
-			double* Etgt = E1.getCellRef(x,y,z);
-			double* Btgt = B1.getCellRef(x,y,z);
-			Etgt[0] = Ebuffer[3*i];
-			Etgt[1] = Ebuffer[3*i+1];
-			Etgt[2] = Ebuffer[3*i+2];
-			Btgt[0] = Bbuffer[3*i];
-			Btgt[1] = Bbuffer[3*i+1];
-			Btgt[2] = Bbuffer[3*i+2];
+			double* ftgt = f.getCellRef(x,y,z);
+			ftgt[0] = buffer[3*i];
+			ftgt[1] = buffer[3*i+1];
+			ftgt[2] = buffer[3*i+2];
 		}
 
-		r.close();
-		retval = true;
+		return f;
 	}
 
-	return retval;
-}
+	Field read_velocity_field() {
 
-/* Non-template version, autodetecting the reader type */
-static bool read_next_timestep(const std::string& filename_pattern, double t, int step, Field& E0, Field& E1,
-	Field& B0, Field& B1, int& input_file_counter) {
+		Field V = readField("rho_v",3u);
+		Field rho = readField("rho",1u);
 
-	char filename_buffer[256];
-	snprintf(filename_buffer,256,filename_pattern.c_str(),input_file_counter);
+		for(uint i=0; i< cellIds.size(); i++) {
+			V.data[4*i] /= rho.data[4*i];
+			V.data[4*i+1] /= rho.data[4*i];
+			V.data[4*i+2] /= rho.data[4*i];
+		}
 
-	if(checkVersion(filename_buffer)) {
-		return read_next_timestep<newVlsv::Reader>(filename_pattern, t,
-			step,E0,E1,B0,B1,input_file_counter);
-	} else {
-		return read_next_timestep<oldVlsv::Reader>(filename_pattern, t,
-			step,E0,E1,B0,B1,input_file_counter);
+		return V;
 	}
-}
 
-/* Read E- and B-Fields as well as velocity field from a vlsv file */
+	Interpolated_Field interpolate_B(double time) {
+		return Interpolated_Field(B[0],B[1],time);
+	}
+	Interpolated_Field interpolate_E(double time) {
+		return Interpolated_Field(B[0],B[1],time);
+	}
+
+	/** Open the file data required for the next timestep.
+	 *  If the corresponding file is already opened, simply do nothing.
+	 *  Return value specifies whether a new file was opened. */
+	virtual bool open_next_timestep(double t) = 0;
+	virtual bool read_next_timestep(double t, Field& E0, Field& E1,
+			Field& B0, Field& B1) {
+
+		if(open_next_timestep(t)) {
+			uint64_t cells[3];
+			cells[0] = readUintParameter(r,"xcells_ini");
+			cells[1] = readUintParameter(r,"ycells_ini");
+			cells[2] = readUintParameter(r,"zcells_ini");
+
+			/* Read CellIDs and Field data */
+			cellIds = readCellIds(r);
+			std::string name(B_field_name);
+			std::vector<double> Bbuffer = readFieldData(name,3u);
+			name = E_field_name;
+			std::vector<double> Ebuffer = readFieldData(name,3u);
+
+			/* Assign them, without sanity checking */
+			/* TODO: Is this actually a good idea? */
+			for(uint i=0; i< cellIds.size(); i++) {
+				uint64_t c = cellIds[i];
+				int64_t x = c % cells[0];
+				int64_t y = (c /cells[0]) % cells[1];
+				int64_t z = c /(cells[0]*cells[1]);
+
+				double* Etgt = E1.getCellRef(x,y,z);
+				double* Btgt = B1.getCellRef(x,y,z);
+				Etgt[0] = Ebuffer[3*i];
+				Etgt[1] = Ebuffer[3*i+1];
+				Etgt[2] = Ebuffer[3*i+2];
+				Btgt[0] = Bbuffer[3*i];
+				Btgt[1] = Bbuffer[3*i+1];
+				Btgt[2] = Bbuffer[3*i+2];
+			}
+
+			return true;
+		}
+
+		return false;
+	}
+
+};
+
 template <class Reader>
-void readfields(const char* filename, Field& E, Field& B, Field& V) {
-	Reader r;
+class vlsvForwardFieldReader: public vlsvFieldReader<Reader> {
+protected:
+	// Darn you, C++ template inheritance
+	using vlsvFieldReader<Reader>::E;
+	using vlsvFieldReader<Reader>::B;
+	using vlsvFieldReader<Reader>::cellIds;
+	using vlsvFieldReader<Reader>::E_field_name;
+	using vlsvFieldReader<Reader>::B_field_name;
+	using vlsvFieldReader<Reader>::r;
+	using vlsvFieldReader<Reader>::input_file_counter;
+	using vlsvFieldReader<Reader>::filename_pattern;
+	using vlsvFieldReader<Reader>::readFieldData;
+	using vlsvFieldReader<Reader>::detect_field_names;
+
+public:
+	virtual void open(const std::string& _filename_pattern, double t0=0, double input_file_step=1.) {
+		char filename_buffer[256];
+		filename_pattern = _filename_pattern;
+		input_file_counter = floor(t0/input_file_step)-1;
+		snprintf(filename_buffer,256,filename_pattern.c_str(),input_file_counter);
+
 
 #ifdef DEBUG
-	std::cerr << "Opening " << filename << "...";
+		std::cerr << "Opening " << filename_buffer << "...";
 #endif
-	r.open(filename);
+		r.open(filename_buffer);
 #ifdef DEBUG
-	std::cerr <<"ok." << std::endl;
+		std::cerr <<"ok." << std::endl;
 #endif
+		detect_field_names();
 
-	/* Check whethere we got volume-centered fields */
-	detect_field_names<Reader>(r);
+		/* Set dummy times so that the next timestep will always be read */
+		E[0].time = 99999999999999.;
+		E[1].time = -99999999999999.;
 
-	/* Read the MESH, yielding the CellIDs */
-	std::vector<uint64_t> cellIds = readCellIds(r);
+		/* Read the cellIDs so they can next be used to sort field data
+                 * into place */
+		/* Read the MESH, yielding the CellIDs */
+		cellIds = readCellIds(r);
 
-	/* Also read the raw field data */
-	std::string name= B_field_name;
-	std::vector<double> Bbuffer = readFieldData(r,name,3u);
-	name = E_field_name;
-	std::vector<double> Ebuffer = readFieldData(r,name,3u);
-
-	name = "rho_v";
-	std::vector<double> rho_v_buffer = readFieldData(r,name,3u);
-	name = "rho";
-	std::vector<double> rho_buffer = readFieldData(r,name,1u);
-
-	/* Coordinate Boundaries */
-	double min[3], max[3], time;
-	uint64_t cells[3];
-	min[0] = readDoubleParameter(r,"xmin");
-	min[1] = readDoubleParameter(r,"ymin");
-	min[2] = readDoubleParameter(r,"zmin");
-	max[0] = readDoubleParameter(r,"xmax");
-	max[1] = readDoubleParameter(r,"ymax");
-	max[2] = readDoubleParameter(r,"zmax");
-	cells[0] = readUintParameter(r,"xcells_ini");
-	cells[1] = readUintParameter(r,"ycells_ini");
-	cells[2] = readUintParameter(r,"zcells_ini");
-	time = readDoubleParameter(r,"t");
-
-	//std::cerr << "Grid is " << cells[0] << " x " << cells[1] << " x " << cells[2] << " Cells, " << std::endl
-	//	<< " with dx = " << ((max[0]-min[0])/cells[0]) << ", dy = " << ((max[1]-min[1])/cells[1])
-	//	<< ", dz = " << ((max[2]-min[2])/cells[2]) << "." << std::endl;
-
-	/* Allocate space for the actual field structures */
-	E.data.resize(4*cells[0]*cells[1]*cells[2]);
-	B.data.resize(4*cells[0]*cells[1]*cells[2]);
-	V.data.resize(4*cells[0]*cells[1]*cells[2]);
-
-	/* Sanity-check stored data sizes */
-	if(3*cellIds.size() != Bbuffer.size()) {
-		std::cerr << "3 * cellIDs.size (" << cellIds.size() << ") != Bbuffer.size (" << Bbuffer.size() << ")!"
-			<< std::endl;
-		exit(1);
 	}
-	if(3*cellIds.size() != Ebuffer.size()) {
-		std::cerr << "3 * cellIDs.size (" << cellIds.size() << ") != Ebuffer.size (" << Ebuffer.size() << ")!"
-			<< std::endl;
-		exit(1);
-	}
-	if(3*cellIds.size() != rho_v_buffer.size()) {
-		std::cerr << "3 * cellIDs.size (" << cellIds.size() << ") != rho_v_buffer.size (" << Ebuffer.size() << ")!"
-			<< std::endl;
-		exit(1);
-	}
-	if(cellIds.size() != rho_buffer.size()) {
-		std::cerr << "cellIDs.size (" << cellIds.size() << ") != rho_buffer.size (" << Ebuffer.size() << ")!"
-			<< std::endl;
-		exit(1);
+	virtual bool open_next_timestep(double t) {
+		char filename_buffer[256];
+		bool retval = false;
+
+		while(t < E[0].time || t>= E[1].time) {
+#ifdef DEBUG
+			std::cerr << "Reading next timestep. t = " << t << "  E[0] is at " <<
+				E[0].time << ",  E[1] is at " << E[1].time << std::endl;
+#endif
+			snprintf(filename_buffer,256,filename_pattern.c_str(),input_file_counter);
+			input_file_counter += 1;
+
+			r.close();
+#ifdef DEBUG
+		std::cerr << "Opening " << filename_buffer << "...";
+#endif
+			r.open(filename_buffer);
+#ifdef DEBUG
+		std::cerr <<"ok." << std::endl;
+#endif
+			retval = true;
+			double new_t = readDoubleParameter(r,"t");
+			cellIds = readCellIds(r);
+
+			if(new_t <= t) {
+				/* If the other timestep is already initialized, push onwards */
+				if(E[0].time < 99999999999999.) {
+					E[1] = E[0];
+					B[1] = B[0];
+				}
+				E[0] = readField(E_field_name,3);
+				B[0] = readField(B_field_name,3);
+			}
+			if(new_t > t) {
+				if(E[1].time > -99999999999999.) {
+					E[0] = E[1];
+					B[0] = B[1];
+				}
+				E[1] = readField(E_field_name,3);
+				B[1] = readField(B_field_name,3);
+			}
+		}
+		return retval;
 	}
 
-	/* Set field sizes */
-	for(int i=0; i<3;i++) {
-		/* Volume-centered values -> shift by half a cell in all directions*/
-		E.dx[i] = B.dx[i] = V.dx[i] = (max[i]-min[i])/cells[i];
-		double shift = E.dx[i]/2;
-		E.min[i] = B.min[i] = V.min[i] = min[i]+shift;
-		E.max[i] = B.max[i] = V.max[i] = max[i]+shift;
-		E.cells[i] = B.cells[i] = V.cells[i] = cells[i];
+
+
+};
+
+template <class Reader>
+class vlsvBackwardFieldReader: public vlsvFieldReader<Reader> {
+protected:
+	// Darn you, C++ template inheritance
+	using vlsvFieldReader<Reader>::E;
+	using vlsvFieldReader<Reader>::B;
+	using vlsvFieldReader<Reader>::cellIds;
+	using vlsvFieldReader<Reader>::E_field_name;
+	using vlsvFieldReader<Reader>::B_field_name;
+	using vlsvFieldReader<Reader>::r;
+	using vlsvFieldReader<Reader>::input_file_counter;
+	using vlsvFieldReader<Reader>::filename_pattern;
+	using vlsvFieldReader<Reader>::readFieldData;
+	using vlsvFieldReader<Reader>::detect_field_names;
+public:
+	virtual void open(const std::string& _filename_pattern, double t0=0, double input_file_step=1.) {
+		char filename_buffer[256];
+		filename_pattern = _filename_pattern;
+		input_file_counter = floor(t0/input_file_step)+1;
+		snprintf(filename_buffer,256,filename_pattern.c_str(),input_file_counter);
+
+
+#ifdef DEBUG
+		std::cerr << "Opening " << filename_buffer << "...";
+#endif
+		r.open(filename_buffer);
+#ifdef DEBUG
+		std::cerr <<"ok." << std::endl;
+#endif
+		detect_field_names();
+
+		/* Set dummy times so that the next timestep will always be read */
+		E[0].time = 99999999999999.;
+		E[1].time = -99999999999999.;
+
+		/* Read the cellIDs so they can next be used to sort field data
+                 * into place */
+		/* Read the MESH, yielding the CellIDs */
+		cellIds = readCellIds(r);
+
 	}
-	E.time = B.time = V.time = time;
+	virtual bool open_next_timestep(double t) {
+		char filename_buffer[256];
+		bool retval = false;
 
-	/* So, now we've got the cellIDs, the mesh size and the field values,
-	 * we can sort them into place */
-	for(uint i=0; i< cellIds.size(); i++) {
-		uint64_t c = cellIds[i];
-		int64_t x = c % cells[0];
-		int64_t y = (c /cells[0]) % cells[1];
-		int64_t z = c /(cells[0]*cells[1]);
+		while(t < E[0].time || t>= E[1].time) {
+#ifdef DEBUG
+			std::cerr << "Read next timestep. t = " << t << "  E[0] is at " <<
+				E[0].time << ",  E[1] is at " << E[1].time << std::endl;
+#endif /* DEBUG */
+			snprintf(filename_buffer,256,filename_pattern.c_str(),input_file_counter);
+			input_file_counter -= 1;
 
-		double* Etgt = E.getCellRef(x,y,z);
-		double* Btgt = B.getCellRef(x,y,z);
-		double* Vtgt = V.getCellRef(x,y,z);
-		Etgt[0] = Ebuffer[3*i];
-		Etgt[1] = Ebuffer[3*i+1];
-		Etgt[2] = Ebuffer[3*i+2];
-		Btgt[0] = Bbuffer[3*i];
-		Btgt[1] = Bbuffer[3*i+1];
-		Btgt[2] = Bbuffer[3*i+2];
-		Vtgt[0] = rho_v_buffer[3*i] / rho_buffer[i];
-		Vtgt[1] = rho_v_buffer[3*i+1] / rho_buffer[i];
-		Vtgt[2] = rho_v_buffer[3*i+2] / rho_buffer[i];
+			r.close();
+#ifdef DEBUG
+		std::cerr << "Opening " << filename_buffer << "...";
+#endif
+			r.open(filename_buffer);
+#ifdef DEBUG
+		std::cerr <<"ok." << std::endl;
+#endif
+			retval = true;
+			double new_t = readDoubleParameter(r,"t");
+			cellIds = readCellIds(r);
+
+			if(new_t <= t) {
+				/* If the other timestep is already initialized, push onwards */
+				if(E[0].time < 99999999999999.) {
+					E[1] = E[0];
+					B[1] = B[0];
+				}
+				E[0] = readField(E_field_name,3);
+				B[0] = readField(B_field_name,3);
+			}
+			if(new_t > t) {
+				if(E[1].time > -99999999999999.) {
+					E[0] = E[1];
+					B[0] = B[1];
+				}
+				E[1] = readField(E_field_name,3);
+				B[1] = readField(B_field_name,3);
+			}
+		}
+		return retval;
 	}
+};
 
-	r.close();
-}
-
-/* Non-template version, autodetecting the reader type */
-static void readfields(const char* filename, Field& E, Field& B, Field& V) {
-	if(checkVersion(filename)) {
-		readfields<newVlsv::Reader>(filename,E,B,V);
-	} else {
-		readfields<oldVlsv::Reader>(filename,E,B,V);
-	}
-}
 
 /* For debugging purposes - dump a field into a png file */
 void debug_output(Field& F, const char* filename);

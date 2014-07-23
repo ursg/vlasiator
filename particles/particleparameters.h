@@ -11,6 +11,9 @@ class Distribution; //forward declaration
 struct ParticleParameters {
 	static std::string input_filename_pattern; /*!< printf() - like pattern giving the input filenames */
 	static std::string output_filename_pattern; /*!< printf() - like pattern giving the output filenames */
+	static double input_file_step;              /*!< Input filenames are spaced this many seconds */
+	static double output_file_step;             /*!< Outputis writen this many seconds apart */
+
 	static std::string mode; /*!< Particle tracing mode  */
 
 	static Real init_x; /*!< Particle starting point, x-coordinate */
