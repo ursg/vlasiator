@@ -163,7 +163,6 @@ int main(int argn,char* args[]) {
    MPI_Comm comm = MPI_COMM_WORLD;
    MPI_Comm_rank(comm,&myRank);
    SysBoundary sysBoundaries;
-   bool isSysBoundaryCondDynamic;
    vector<uint64_t> cells;
    
    #ifdef CATCH_FPE
@@ -223,7 +222,6 @@ int main(int argn,char* args[]) {
    */
    dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry> mpiGrid;
    initializeGrid(argn,args,mpiGrid,sysBoundaries,*project);
-   isSysBoundaryCondDynamic = sysBoundaries.isDynamic();
    phiprof::stop("Init grid");
    phiprof::start("Init DROs");
    // Initialize data reduction operators. This should be done elsewhere in order to initialize 
@@ -514,6 +512,24 @@ int main(int argn,char* args[]) {
       phiprof::start("Propagate");
       //Propagate the state of simulation forward in time by dt:
       
+      phiprof::start("Update system boundaries");
+      phiprof::start("Update templates");
+      if(!sysBoundaries.update(mpiGrid, P::t)) {
+         std::cerr << "System boundary update failed!" << std::endl;
+         abort();
+      }
+      phiprof::stop("Update templates");
+      if (P::propagateVlasovTranslation || P::propagateVlasovAcceleration ) {
+         phiprof::start("Update system boundaries (Vlasov)");
+         sysBoundaries.applySysBoundaryVlasovConditions(mpiGrid, P::t+0.5*P::dt); 
+         phiprof::stop("Update system boundaries (Vlasov)");
+         addTimedBarrier("barrier-boundary-conditions");
+      }
+      phiprof::stop("Update system boundaries");
+      
+      updateRemoteVelocityBlockLists(mpiGrid);
+      
+      
       phiprof::start("Spatial-space");
       if( P::propagateVlasovTranslation)
          calculateSpatialTranslation(mpiGrid,P::dt);
@@ -531,14 +547,7 @@ int main(int argn,char* args[]) {
          CellParams::P_22_DT2,
          CellParams::P_33_DT2
       );
-      
-      if (P::propagateVlasovTranslation || P::propagateVlasovAcceleration ) {
-         phiprof::start("Update system boundaries (Vlasov)");
-         sysBoundaries.applySysBoundaryVlasovConditions(mpiGrid, P::t+0.5*P::dt); 
-         phiprof::stop("Update system boundaries (Vlasov)");
-         addTimedBarrier("barrier-boundary-conditions");
-      }
-      
+
       // Propagate fields forward in time by dt. This needs to be done before the
       // moments for t + dt are computed (field uses t and t+0.5dt)
       if (P::propagateField == true) {
