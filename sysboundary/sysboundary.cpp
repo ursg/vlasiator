@@ -48,7 +48,7 @@ SysBoundary::~SysBoundary() {
 
 /*!\brief Add its own and all existing SysBoundaryConditions' parameters.
  * 
- * Adds the parameters specific to the SysBondary class handling the list of
+ * Adds the parameters specific to the SysBoundary class handling the list of
  * SysBoundaryConditions and then calls the static addParameters functions of all
  * SysBoundaryConditions implemented in the code in order to have them appear also in the
  * help.
@@ -408,10 +408,22 @@ SBC::SysBoundaryCondition* SysBoundary::getSysBoundary(cuint sysBoundaryType) co
  */
 unsigned int SysBoundary::size() const {return sysBoundaries.size();}
 
-/*! Get a bool telling whether any system boundary condition is dynamic in time (and thus needs updating).
- * \retval isThisDynamic Is any system boundary condition dynamic in time.
- */
-bool SysBoundary::isDynamic() const {return isThisDynamic;}
+/*! Function used to update time-dynamic system boundary conditions.*/
+bool SysBoundary::update(
+   const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
+   creal& t
+) {
+   bool success = true;
+   list<SBC::SysBoundaryCondition*>::iterator it;
+   for (it = sysBoundaries.begin();
+        it != sysBoundaries.end();
+        it++) {
+      if((*it)->isDynamic()) {
+         success = success && (*it)->update(mpiGrid, t);
+      }
+   }
+   return success;
+}
 
 /*! Get a bool telling whether the system is periodic in the queried direction.
  * \param direction 0: x, 1: y, 2: z.

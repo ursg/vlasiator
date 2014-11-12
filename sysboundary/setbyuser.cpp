@@ -202,7 +202,7 @@ namespace SBC {
       const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
       const CellID& cellID
    ) {
-      // No need to do anything in this function, as the propagators do not touch the distribution function   
+      this->setCellFromTemplate(mpiGrid[cellID], false, true);
    }
    
    bool SetByUser::setCellsFromTemplate(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid) {
@@ -212,31 +212,46 @@ namespace SBC {
          SpatialCell* cell = mpiGrid[cells[i]];
          if(cell->sysBoundaryFlag != this->getIndex()) continue;
          
-         creal dx = cell->parameters[CellParams::DX];
-         creal dy = cell->parameters[CellParams::DY];
-         creal dz = cell->parameters[CellParams::DZ];
-         creal x = cell->parameters[CellParams::XCRD] + 0.5*dx;
-         creal y = cell->parameters[CellParams::YCRD] + 0.5*dy;
-         creal z = cell->parameters[CellParams::ZCRD] + 0.5*dz;
-         
-         bool isThisCellOnAFace[6];
-         determineFace(&isThisCellOnAFace[0], x, y, z, dx, dy, dz);
-         
-         for(uint i=0; i<6; i++) {
-            if(facesToProcess[i] && isThisCellOnAFace[i]) {
+         this->setCellFromTemplate(cell, true, true);
+      }
+      return true;
+   }
+   
+   void SetByUser::setCellFromTemplate(
+      spatial_cell::SpatialCell* cell,
+      const bool setFields,
+      const bool setVlasov
+   ) {
+      creal dx = cell->parameters[CellParams::DX];
+      creal dy = cell->parameters[CellParams::DY];
+      creal dz = cell->parameters[CellParams::DZ];
+      creal x = cell->parameters[CellParams::XCRD] + 0.5*dx;
+      creal y = cell->parameters[CellParams::YCRD] + 0.5*dy;
+      creal z = cell->parameters[CellParams::ZCRD] + 0.5*dz;
+      
+      bool isThisCellOnAFace[6];
+      determineFace(&isThisCellOnAFace[0], x, y, z, dx, dy, dz);
+      
+      for(uint i=0; i<6; i++) {
+         if(facesToProcess[i] && isThisCellOnAFace[i]) {
+            if(setFields) {
                cell->parameters[CellParams::PERBX] = templateCells[i].parameters[CellParams::PERBX];
                cell->parameters[CellParams::PERBY] = templateCells[i].parameters[CellParams::PERBY];
                cell->parameters[CellParams::PERBZ] = templateCells[i].parameters[CellParams::PERBZ];
-               
+               cell->parameters[CellParams::PERBX_DT2] = templateCells[i].parameters[CellParams::PERBX_DT2];
+               cell->parameters[CellParams::PERBY_DT2] = templateCells[i].parameters[CellParams::PERBY_DT2];
+               cell->parameters[CellParams::PERBZ_DT2] = templateCells[i].parameters[CellParams::PERBZ_DT2];
+            }
+            
+            if(setVlasov) {
                cell->parameters[CellParams::RHOLOSSADJUST] = 0.0;
                cell->parameters[CellParams::RHOLOSSVELBOUNDARY] = 0.0;
                
                copyCellData(&templateCells[i], cell,true);
-               break; // This effectively sets the precedence of faces through the order of faces.
             }
+            break; // This effectively sets the precedence of faces through the order of faces.
          }
       }
-      return true;
    }
    
    void SetByUser::getFaces(bool* faces) {
@@ -416,6 +431,15 @@ namespace SBC {
 
    void SetByUser::generateTemplateCell(spatial_cell::SpatialCell& templateCell, int inputDataIndex, creal& t) {
       cerr << "Base class SetByUser::generateTemplateCell() called instead of derived class function!" << endl;
+   }
+   
+   bool SetByUser::update(
+      const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
+      creal& t
+   ) {
+      bool success = true;
+      success = success && this->generateTemplateCells(t);
+      return success;
    }
    
    string SetByUser::getName() const {

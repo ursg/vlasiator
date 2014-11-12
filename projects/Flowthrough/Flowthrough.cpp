@@ -100,32 +100,31 @@ namespace projects {
    }
 
    Real Flowthrough::calcPhaseSpaceDensity(creal& x, creal& y, creal& z, creal& dx, creal& dy, creal& dz, creal& vx, creal& vy, creal& vz, creal& dvx, creal& dvy, creal& dvz) {
-      creal d_x = dx / (this->nSpaceSamples-1);
-      creal d_y = dy / (this->nSpaceSamples-1);
-      creal d_z = dz / (this->nSpaceSamples-1);
-      creal d_vx = dvx / (this->nVelocitySamples-1);
-      creal d_vy = dvy / (this->nVelocitySamples-1);
-      creal d_vz = dvz / (this->nVelocitySamples-1);
-      
-      Real avg = 0.0;
-   // #pragma omp parallel for collapse(6) reduction(+:avg)
-      // WARNING No threading here if calling functions are already threaded
-      for (uint i=0; i<this->nSpaceSamples; ++i)
-         for (uint j=0; j<this->nSpaceSamples; ++j)
-            for (uint k=0; k<this->nSpaceSamples; ++k)
-               for (uint vi=0; vi<this->nVelocitySamples; ++vi)
-                  for (uint vj=0; vj<this->nVelocitySamples; ++vj)
-                     for (uint vk=0; vk<this->nVelocitySamples; ++vk) {
-                        avg += getDistribValue(x+i*d_x, y+j*d_y, z+k*d_z, vx+vi*d_vx, vy+vj*d_vy, vz+vk*d_vz, dvx, dvy, dvz);
-                     }
-                     return avg / (this->nSpaceSamples*this->nSpaceSamples*this->nSpaceSamples*this->nVelocitySamples*this->nVelocitySamples*this->nVelocitySamples);
-      
-   //    CellID cellID = 1 + round((x - Parameters::xmin) / dx + 
-   //    (y - Parameters::ymin) / dy * Parameters::xcells_ini +
-   //    (z - Parameters::zmin) / dz * Parameters::ycells_ini * Parameters::xcells_ini);
-      
-   //    return cellID * pow(physicalconstants::MASS_PROTON / (2.0 * M_PI * physicalconstants::K_B * this->T), 1.5) *
-   //    exp(- physicalconstants::MASS_PROTON * (vx*vx + vy*vy + vz*vz) / (2.0 * physicalconstants::K_B * this->T));
+      if((this->nSpaceSamples > 1) && (this->nVelocitySamples > 1)) {
+         creal d_x = dx / (this->nSpaceSamples-1);
+         creal d_y = dy / (this->nSpaceSamples-1);
+         creal d_z = dz / (this->nSpaceSamples-1);
+         creal d_vx = dvx / (this->nVelocitySamples-1);
+         creal d_vy = dvy / (this->nVelocitySamples-1);
+         creal d_vz = dvz / (this->nVelocitySamples-1);
+         
+         Real avg = 0.0;
+         // #pragma omp parallel for collapse(6) reduction(+:avg)
+         // WARNING No threading here if calling functions are already threaded
+         for (uint i=0; i<this->nSpaceSamples; ++i)
+            for (uint j=0; j<this->nSpaceSamples; ++j)
+               for (uint k=0; k<this->nSpaceSamples; ++k)
+                  for (uint vi=0; vi<this->nVelocitySamples; ++vi)
+                     for (uint vj=0; vj<this->nVelocitySamples; ++vj)
+                        for (uint vk=0; vk<this->nVelocitySamples; ++vk) {
+                           avg += getDistribValue(x+i*d_x, y+j*d_y, z+k*d_z, vx+vi*d_vx, vy+vj*d_vy, vz+vk*d_vz, dvx, dvy, dvz);
+                        }
+                        return avg /
+                        (this->nSpaceSamples*this->nSpaceSamples*this->nSpaceSamples) /
+                        (this->nVelocitySamples*this->nVelocitySamples*this->nVelocitySamples);
+      } else {
+         return getDistribValue(x+0.5*dx, y+0.5*dy, z+0.5*dz, vx+0.5*dvx, vy+0.5*dvy, vz+0.5*dvz, dvx, dvy, dvz);
+      }
    }
 
    void Flowthrough::calcCellParameters(Real* cellParams,creal& t) {

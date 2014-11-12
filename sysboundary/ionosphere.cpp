@@ -107,7 +107,7 @@ namespace SBC {
       Project &project
    ) {
       getParameters();
-      isThisDynamic = false;
+      this->isThisDynamic = false;
       
       generateTemplateCell(project);
       
@@ -539,15 +539,15 @@ namespace SBC {
       vector<uint> blocksToInitialize = this->findBlocksToInitialize(templateCell);
       
       for (uint i = 0; i < blocksToInitialize.size(); i++) {
-	 const vmesh::GlobalID blockGID = blocksToInitialize.at(i);
-	 const vmesh::LocalID blockLID = templateCell.get_velocity_block_local_id(blockGID);
-	 const Real* block_parameters = templateCell.get_block_parameters(blockLID);
+         const vmesh::GlobalID blockGID = blocksToInitialize.at(i);
+         const vmesh::LocalID blockLID = templateCell.get_velocity_block_local_id(blockGID);
+         const Real* block_parameters = templateCell.get_block_parameters(blockLID);
          creal vxBlock = block_parameters[BlockParams::VXCRD];
          creal vyBlock = block_parameters[BlockParams::VYCRD];
          creal vzBlock = block_parameters[BlockParams::VZCRD];
-	 creal dvxCell = block_parameters[BlockParams::DVX];
-	 creal dvyCell = block_parameters[BlockParams::DVY];
-	 creal dvzCell = block_parameters[BlockParams::DVZ];
+         creal dvxCell = block_parameters[BlockParams::DVX];
+         creal dvyCell = block_parameters[BlockParams::DVY];
+         creal dvzCell = block_parameters[BlockParams::DVZ];
 
          creal x = templateCell.parameters[CellParams::XCRD];
          creal y = templateCell.parameters[CellParams::YCRD];
@@ -557,6 +557,7 @@ namespace SBC {
          creal dz = templateCell.parameters[CellParams::DZ];
          
          // Calculate volume average of distrib. function for each cell in the block.
+         uint vcell = 0;
          for (uint kc=0; kc<WID; ++kc) 
             for (uint jc=0; jc<WID; ++jc) 
                for (uint ic=0; ic<WID; ++ic) {
@@ -587,11 +588,9 @@ namespace SBC {
                   }
                   
                   if(average!=0.0){
-                     creal vxCellCenter = vxBlock + (ic+convert<Real>(0.5))*dvxCell;
-                     creal vyCellCenter = vyBlock + (jc+convert<Real>(0.5))*dvyCell;
-                     creal vzCellCenter = vzBlock + (kc+convert<Real>(0.5))*dvzCell;
-                     templateCell.set_value(vxCellCenter,vyCellCenter,vzCellCenter,average);
+                     templateCell.set_value(blockGID, vcell, average);
                   }
+            vcell++;
          }
       }
       //let's get rid of blocks not fulfilling the criteria here to save
@@ -623,8 +622,8 @@ namespace SBC {
       
       while (search) {
          if (0.1 * P::sparseMinValue >
-	    //shiftedMaxwellianDistribution(counter*blockSize[0], 0.0, 0.0) || counter > P::vxblocks_ini) {
-	    shiftedMaxwellianDistribution(counter*SpatialCell::get_velocity_base_grid_block_size()[0], 0.0, 0.0) || counter > P::vxblocks_ini) {
+            //shiftedMaxwellianDistribution(counter*blockSize[0], 0.0, 0.0) || counter > P::vxblocks_ini) {
+            shiftedMaxwellianDistribution(counter*SpatialCell::get_velocity_base_grid_block_size()[0], 0.0, 0.0) || counter > P::vxblocks_ini) {
             search = false;
          }
          ++counter;
@@ -637,9 +636,9 @@ namespace SBC {
       for (uint kv=0; kv<P::vzblocks_ini; ++kv) 
          for (uint jv=0; jv<P::vyblocks_ini; ++jv)
             for (uint iv=0; iv<P::vxblocks_ini; ++iv) {
-	       creal vx = P::vxmin + (iv+0.5) * SpatialCell::get_velocity_base_grid_block_size()[0]; // vx-coordinate of the centre
-	       creal vy = P::vymin + (jv+0.5) * SpatialCell::get_velocity_base_grid_block_size()[1]; // vy-
-	       creal vz = P::vzmin + (kv+0.5) * SpatialCell::get_velocity_base_grid_block_size()[2]; // vz-
+               creal vx = P::vxmin + (iv+0.5) * SpatialCell::get_velocity_base_grid_block_size()[0]; // vx-coordinate of the centre
+               creal vy = P::vymin + (jv+0.5) * SpatialCell::get_velocity_base_grid_block_size()[1]; // vy-
+               creal vz = P::vzmin + (kv+0.5) * SpatialCell::get_velocity_base_grid_block_size()[2]; // vz-
                
                if (vx*vx + vy*vy + vz*vz < vRadiusSquared) {
                   cell.add_velocity_block(cell.get_velocity_block(vx, vy, vz));

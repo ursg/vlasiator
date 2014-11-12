@@ -111,8 +111,9 @@ namespace SBC {
             maxwellianDistribution(
                rho,
                T,
-	       counter*SpatialCell::get_velocity_base_grid_block_size()[0], 0.0, 0.0
-				   
+               VX0 + counter*SpatialCell::get_velocity_base_grid_block_size()[0],
+               VY0,
+               VZ0
             )
             ||
             counter > P::vxblocks_ini
@@ -121,20 +122,21 @@ namespace SBC {
          }
          counter++;
       }
-      counter+=2;
+      counter+=4;
 
       Real vRadiusSquared = (Real)counter*(Real)counter*SpatialCell::get_velocity_base_grid_block_size()[0]*SpatialCell::get_velocity_base_grid_block_size()[0];
       
       for (uint kv=0; kv<P::vzblocks_ini; ++kv) 
          for (uint jv=0; jv<P::vyblocks_ini; ++jv)
             for (uint iv=0; iv<P::vxblocks_ini; ++iv) {
-	       creal vx = P::vxmin + (iv+0.5) * SpatialCell::get_velocity_base_grid_block_size()[0]; // vx-coordinate of the centre
-	       creal vy = P::vymin + (jv+0.5) * SpatialCell::get_velocity_base_grid_block_size()[1]; // vy-
-	       creal vz = P::vzmin + (kv+0.5) * SpatialCell::get_velocity_base_grid_block_size()[2]; // vz-
+               creal vx = P::vxmin + (iv+0.5) * SpatialCell::get_velocity_base_grid_block_size()[0]; // vx-coordinate of the centre
+               creal vy = P::vymin + (jv+0.5) * SpatialCell::get_velocity_base_grid_block_size()[1]; // vy-
+               creal vz = P::vzmin + (kv+0.5) * SpatialCell::get_velocity_base_grid_block_size()[2]; // vz-
 
                if((vx-VX0)*(vx-VX0) + (vy-VY0)*(vy-VY0) + (vz-VZ0)*(vz-VZ0) < vRadiusSquared) {
-                  cell.add_velocity_block(cell.get_velocity_block(vx, vy, vz));
-                  blocksToInitialize.push_back(cell.get_velocity_block(vx, vy, vz));
+                  const vmesh::GlobalID blockGID = cell.get_velocity_block(vx, vy, vz);
+                  cell.add_velocity_block(blockGID);
+                  blocksToInitialize.push_back(blockGID);
                }
       }
       
@@ -180,15 +182,15 @@ namespace SBC {
       vector<uint> blocksToInitialize = this->findBlocksToInitialize(templateCell, rho, T, Vx, Vy, Vz);
       
       for(uint i = 0; i < blocksToInitialize.size(); i++) {
-	 const vmesh::GlobalID blockGID = blocksToInitialize.at(i);
-	 const vmesh::LocalID blockLID = templateCell.get_velocity_block_local_id(blockGID);
-	 const Real* block_parameters = templateCell.get_block_parameters(blockLID);
+         const vmesh::GlobalID blockGID = blocksToInitialize.at(i);
+         const vmesh::LocalID blockLID = templateCell.get_velocity_block_local_id(blockGID);
+         const Real* block_parameters = templateCell.get_block_parameters(blockLID);
          creal vxBlock = block_parameters[BlockParams::VXCRD];
          creal vyBlock = block_parameters[BlockParams::VYCRD];
          creal vzBlock = block_parameters[BlockParams::VZCRD];
-	 creal dvxCell = block_parameters[BlockParams::DVX];
-	 creal dvyCell = block_parameters[BlockParams::DVY];
-	 creal dvzCell = block_parameters[BlockParams::DVZ];
+         creal dvxCell = block_parameters[BlockParams::DVX];
+         creal dvyCell = block_parameters[BlockParams::DVY];
+         creal dvzCell = block_parameters[BlockParams::DVZ];
          
          creal x = templateCell.parameters[CellParams::XCRD];
          creal y = templateCell.parameters[CellParams::YCRD];
@@ -198,6 +200,7 @@ namespace SBC {
          creal dz = templateCell.parameters[CellParams::DZ];
          
          // Calculate volume average of distrib. function for each cell in the block.
+         uint vcell=0;
          for (uint kc=0; kc<WID; ++kc) 
             for (uint jc=0; jc<WID; ++jc) 
                for (uint ic=0; ic<WID; ++ic) {
@@ -225,24 +228,21 @@ namespace SBC {
                      average = maxwellianDistribution(
                         rho,
                         T,
-                        vxCell + 0.5*dvxCell,
-                        vyCell + 0.5*dvyCell,
-                        vzCell + 0.5*dvzCell
+                        vxCell + 0.5*dvxCell - Vx,
+                        vyCell + 0.5*dvyCell - Vy,
+                        vzCell + 0.5*dvzCell - Vz
                      );
                   }
                   
                   if(average!=0.0){
-                     creal vxCellCenter = vxBlock + (ic+convert<Real>(0.5))*dvxCell;
-                     creal vyCellCenter = vyBlock + (jc+convert<Real>(0.5))*dvyCell;
-                     creal vzCellCenter = vzBlock + (kc+convert<Real>(0.5))*dvzCell;
-                     templateCell.set_value(vxCellCenter,vyCellCenter,vzCellCenter,average);
+                     templateCell.set_value(blockGID, vcell, average);
                   }
+                  vcell++;
          }
       }
       //let's get rid of blocks not fulfilling the criteria here to save
       //memory.
       templateCell.adjustSingleCellVelocityBlocks();
-      
       calculateCellVelocityMoments(&templateCell, true);
       
       if(!this->isThisDynamic) {
@@ -255,8 +255,15 @@ namespace SBC {
          templateCell.parameters[CellParams::PERBY_DT2] = templateCell.parameters[CellParams::PERBY];
          templateCell.parameters[CellParams::PERBZ_DT2] = templateCell.parameters[CellParams::PERBZ];
       } else {
-         cerr << "ERROR: this is not dynamic in time, please code it!" << endl;
-         abort();
+//          std::cerr << "WARNING Time-independence assumed here. " << __FILE__ << ":" << __LINE__ << std::endl;
+         templateCell.parameters[CellParams::RHO_DT2] = templateCell.parameters[CellParams::RHO];
+         templateCell.parameters[CellParams::RHOVX_DT2] = templateCell.parameters[CellParams::RHOVX];
+         templateCell.parameters[CellParams::RHOVY_DT2] = templateCell.parameters[CellParams::RHOVY];
+         templateCell.parameters[CellParams::RHOVZ_DT2] = templateCell.parameters[CellParams::RHOVZ];
+         templateCell.parameters[CellParams::PERBX_DT2] = templateCell.parameters[CellParams::PERBX];
+         templateCell.parameters[CellParams::PERBY_DT2] = templateCell.parameters[CellParams::PERBY];
+         templateCell.parameters[CellParams::PERBZ_DT2] = templateCell.parameters[CellParams::PERBZ];
+//          abort();
       }
    }
    

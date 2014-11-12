@@ -39,7 +39,7 @@ namespace SBC {
       Project &project
    ) {
       precedence = 0;
-      isThisDynamic = false;
+      this->isThisDynamic = false;
       return true;
    }
    

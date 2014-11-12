@@ -102,13 +102,18 @@ namespace SBC {
             const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
             const CellID& cellID
          );
+         virtual bool update(
+            const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
+            creal& t
+         );
+         
          
          virtual void getFaces(bool* faces);
          virtual std::string getName() const;
          virtual uint getIndex() const;
          uint getPrecedence() const;
          bool isDynamic() const;
-      
+         
       protected:
          void determineFace(
             bool* isThisCellOnAFace,

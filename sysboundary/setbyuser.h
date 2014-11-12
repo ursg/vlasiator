@@ -106,6 +106,15 @@ namespace SBC {
       bool generateTemplateCells(creal& t);
       virtual void generateTemplateCell(spatial_cell::SpatialCell& templateCell, int inputDataIndex, creal& t);
       bool setCellsFromTemplate(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid);
+      void setCellFromTemplate(
+         spatial_cell::SpatialCell* cell,
+         const bool setFields,
+         const bool setVlasov
+      );
+      bool update(
+         const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
+         creal& t
+      );
       
       /*! Array of bool telling which faces are going to be processed by the system boundary condition.*/
       bool facesToProcess[6];
