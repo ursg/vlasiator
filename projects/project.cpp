@@ -19,6 +19,7 @@
 #include "VelocityBox/VelocityBox.h"
 #include "Riemann1/Riemann1.h"
 #include "Shock/Shock.h"
+#include "SilvaShock/SilvaShock.h"
 #include "Template/Template.h"
 #include "test_fp/test_fp.h"
 #include "testHall/testHall.h"
@@ -57,6 +58,7 @@ namespace projects {
       projects::VelocityBox::addParameters();
       projects::Riemann1::addParameters();
       projects::Shock::addParameters();
+      projects::SilvaShock::addParameters();
       projects::Template::addParameters();
       projects::test_fp::addParameters();
       projects::TestHall::addParameters();
@@ -112,7 +114,7 @@ namespace projects {
 
                //FIXME, add_velocity_blocks should  not be needed as set_value handles it!!
                //FIXME,  We should get_velocity_block based on indices, not v
-               cell->add_velocity_block(cell->get_velocity_block(vx, vy, vz));
+               //cell->add_velocity_block(cell->get_velocity_block(vx, vy, vz));
                blocksToInitialize.push_back(cell->get_velocity_block(vx, vy, vz));
       }
 
@@ -360,6 +362,9 @@ Project* createProject() {
    }
    if(Parameters::projectName == "Shock") {
       return new projects::Shock;
+   }
+   if(Parameters::projectName == "SilvaShock") {
+      return new projects::SilvaShock;
    }
    if(Parameters::projectName == "Template") {
       return new projects::Template;
