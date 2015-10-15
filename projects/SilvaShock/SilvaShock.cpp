@@ -139,8 +139,8 @@ namespace projects {
          vz > Parameters::vzmax - 1.5 * dvz
       ) return 0.0;
       
-      creal mass = Parameters::m;
-      creal q = Parameters::q;
+      creal mass = physicalconstants::MASS_PROTON;
+      creal q = physicalconstants::CHARGE;
       creal k = 1.3806505e-23; // Boltzmann
       creal mu0 = 1.25663706144e-6; // mu_0
       Real DENSITY = interpolate(DENSITYu,DENSITYd,x);
