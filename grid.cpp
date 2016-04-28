@@ -152,7 +152,7 @@ void initializeGrid(
       }
       phiprof::stop("Read restart");
       const vector<CellID>& cells = getLocalCells();
-
+      //set background field, FIXME should be read in from restart
       #pragma omp parallel for schedule(dynamic)
       for (size_t i=0; i<cells.size(); ++i) {
          SpatialCell* cell = mpiGrid[cells[i]];

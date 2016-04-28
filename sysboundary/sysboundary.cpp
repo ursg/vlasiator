@@ -520,7 +520,7 @@ void SysBoundary::applySysBoundaryVlasovConditions(
    
    #warning Same sysBoundaryCondition applied to all populations
    // Loop over existing particle species
-   for (int popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID) {
+   for (unsigned int popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID) {
       SpatialCell::setCommunicatedSpecies(popID);
 
       // Then the block data in the reduced neighbourhood:
@@ -566,7 +566,8 @@ void SysBoundary::applySysBoundaryVlasovConditions(
       mpiGrid.wait_remote_neighbor_copy_update_sends();
       phiprof::stop(timer);
 
-   // WARNING Blocks are changed but lists not updated now, if you need to use/communicate them before the next update is done, add an update here.
+      // WARNING Blocks are changed but lists not updated now, if you need to use/communicate them before the next update is done, add an update here.
+      updateRemoteVelocityBlockLists(mpiGrid, popID);
 
    } // for-loop over populations
 }
