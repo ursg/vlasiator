@@ -311,51 +311,125 @@ void calculateAcceleration(const int& popID,const int& globalMaxSubcycles,const 
                            dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
                            const std::vector<CellID>& propagatedCells,
                            const Real& dt) {
+
+   const bool useGPU=true;
+   
    // Set active population
    SpatialCell::setCommunicatedSpecies(popID);
 
    // Semi-Lagrangian acceleration for those cells which are subcycled
-   #pragma omp parallel for schedule(dynamic,1)
-   for (size_t c=0; c<propagatedCells.size(); ++c) {
-      const CellID cellID = propagatedCells[c];
-      const Real maxVdt = mpiGrid[cellID]->get_max_v_dt(popID);
+   if(!useGPU) {
       
-      //compute subcycle dt. The length is maxVdt on all steps
-      //except the last one. This is to keep the neighboring
-      //spatial cells in sync, so that two neighboring cells with
-      //different number of subcycles have similar timesteps,
-      //except that one takes an additional short step. This keeps
-      //spatial block neighbors as much in sync as possible for
-      //adjust blocks.
-      Real subcycleDt;
-      if( (step + 1) * maxVdt > dt) {
-         subcycleDt = max(dt - step * maxVdt, 0.0);
-      } else{
-         subcycleDt = maxVdt;
-      }
+   #pragma omp parallel for schedule(dynamic,1)
+      for (size_t c=0; c<propagatedCells.size(); ++c) {
+         const CellID cellID = propagatedCells[c];
+         const Real maxVdt = mpiGrid[cellID]->get_max_v_dt(popID);
+         
+         //compute subcycle dt. The length is maxVdt on all steps
+         //except the last one. This is to keep the neighboring
+         //spatial cells in sync, so that two neighboring cells with
+         //different number of subcycles have similar timesteps,
+         //except that one takes an additional short step. This keeps
+         //spatial block neighbors as much in sync as possible for
+         //adjust blocks.
+         Real subcycleDt;
+         if( (step + 1) * maxVdt > dt) {
+            subcycleDt = max(dt - step * maxVdt, 0.0);
+         } else{
+            subcycleDt = maxVdt;
+         }
 
-      //generate pseudo-random order which is always the same irrespective of parallelization, restarts, etc.
-      char rngStateBuffer[256];
-      random_data rngDataBuffer;
-
-      // set seed, initialise generator and get value. The order is the same
-      // for all cells, but varies with timestep.
-      memset(&(rngDataBuffer), 0, sizeof(rngDataBuffer));
-      #ifdef _AIX
+         //generate pseudo-random order which is always the same irrespective of parallelization, restarts, etc.
+         char rngStateBuffer[256];
+         random_data rngDataBuffer;
+         
+         // set seed, initialise generator and get value. The order is the same
+         // for all cells, but varies with timestep.
+         memset(&(rngDataBuffer), 0, sizeof(rngDataBuffer));
+#ifdef _AIX
          initstate_r(P::tstep, &(rngStateBuffer[0]), 256, NULL, &(rngDataBuffer));
          int64_t rndInt;
          random_r(&rndInt, &rngDataBuffer);
-      #else
+#else
          initstate_r(P::tstep, &(rngStateBuffer[0]), 256, &(rngDataBuffer));
          int32_t rndInt;
          random_r(&rngDataBuffer, &rndInt);
-      #endif
+#endif
          
-      uint map_order=rndInt%3;
-      phiprof::start("cell-semilag-acc");
-      cpu_accelerate_cell(mpiGrid[cellID],popID,map_order,subcycleDt);
-      phiprof::stop("cell-semilag-acc");
+         uint map_order=rndInt%3;
+         phiprof::start("cell-semilag-acc");
+         cpu_accelerate_cell(mpiGrid[cellID],popID,map_order,subcycleDt);
+         phiprof::stop("cell-semilag-acc");
+      }
    }
+   else {
+      // //collect pointers to relevant spatial cell datas. nvcc is not compatitable with the cpu sptaisl cell / velocity mesh code
+      Realf **blockDatas=new Realf*[propagatedCells.size()];
+      vmesh::GlobalID **blockIDs=new  vmesh::GlobalID*[propagatedCells.size()];
+      vmesh::LocalID *nBlocks=new uint[propagatedCells.size()];
+      Real *intersections = new Real[propagatedCells.size() * AccelerationIntersections::N_INTERSECTIONS ];
+      
+      
+      Realf blockSize[3]; 
+      Realf gridMinLimits[3];
+      vmesh::LocalID gridLength[3];
+      
+      for(uint i = 0; i < 3; i++){
+         blockSize[i] = SpatialCell::get_velocity_grid_block_size()[i]; 
+         gridMinLimits[i]  = SpatialCell::get_velocity_grid_min_limits()[i];
+         gridLength[i] =  SpatialCell::get_velocity_grid_length()[i];
+      }
+         
+            
+      for (size_t c=0; c<propagatedCells.size(); ++c) {
+         SpatialCell* SC = mpiGrid[propagatedCells[c]];
+         blockIDs[c] = SC->get_velocity_mesh(pop).getGrid().data();
+         blockDatas[c] = SC->get_velocity_blocks(pop).getData();
+         nBlocks[c] = SC->size();
+      }
+
+      phiprof::start("compute-transform-intersections");
+      for (size_t c=0; c<propagatedCells.size(); ++c) {
+         const CellID cellID = propagatedCells[c];
+         //Compute transform, forward in time and backward in time
+         Transform<Real,3,Affine> fwd_transform =  compute_acceleration_transformation(mpiGrid[cellID], dt);
+         Transform<Real,3,Affine> bwd_transform= fwd_transform.inverse();
+         //Map order Z X Y  (support rest later...)   
+         compute_intersections_1st(mpiGrid[cellID], bwd_transform, fwd_transform, 2,
+                                   intersections[AccelerationIntersections::Z],
+                                   intersections[AccelerationIntersections::Z_DI],
+                                   intersections[AccelerationIntersections::Z_DJ],
+                                   intersections[AccelerationIntersections::Z_DK]);
+         compute_intersections_2nd(mpiGrid[cellID], bwd_transform, fwd_transform, 0,
+                                   intersections[AccelerationIntersections::X],
+                                   intersections[AccelerationIntersections::X_DI],
+                                   intersections[AccelerationIntersections::X_DJ],
+                                   intersections[AccelerationIntersections::X_DK]);
+         compute_intersections_3rd(mpiGrid[cellID], bwd_transform, fwd_transform, 1,
+                                   intersections[AccelerationIntersections::Y],
+                                   intersections[AccelerationIntersections::Y_DI],
+                                   intersections[AccelerationIntersections::Y_DJ],
+                                   intersections[AccelerationIntersections::Y_DK]);
+      }  
+
+
+      phiprof::stop("compute-transform-intersections");
+      //accelerate all cells on the GPU
+      //Now map in all three dimensions, sweeped as Z X Y
+      phiprof::start("compute-cuda-map3D");
+      map3DCuda(blockDatas, blockIDs, 
+                nBlocks, 
+                intersections,
+                propagatedCells.size(),
+                blockSize, gridLength, gridMinLimits);
+      phiprof::stop("compute-cuda-map3D");
+      // TODO - glue for putting the accelerated data back to the spatial cells     
+      delete[] nBlocks;
+      delete[] blockIDs;
+      delete[] blockDatas;
+   }
+
+   
 
    //global adjust after each subcycle to keep number of blocks managable. Even the ones not
    //accelerating anyore participate. It is important to keep
