@@ -356,18 +356,18 @@ void calculateAcceleration(const int& popID,const int& globalMaxSubcycles,const 
       cpu_accelerate_cell(mpiGrid[cellID],popID,map_order,subcycleDt);
       phiprof::stop("cell-semilag-acc");
    }
-}
+
    
 
-//global adjust after each subcycle to keep number of blocks managable. Even the ones not
-//accelerating anyore participate. It is important to keep
-//the spatial dimension to make sure that we do not loose
-//stuff streaming in from other cells, perhaps not connected
-//to the existing distribution function in the cell.
-//- All cells update and communicate their lists of content blocks
-//- Only cells which were accerelated on this step need to be adjusted (blocks removed or added).
-//- Not done here on last step (done after loop)
-if(step < (globalMaxSubcycles - 1)) adjustVelocityBlocks(mpiGrid, propagatedCells, false, popID);
+   //global adjust after each subcycle to keep number of blocks managable. Even the ones not
+   //accelerating anyore participate. It is important to keep
+   //the spatial dimension to make sure that we do not loose
+   //stuff streaming in from other cells, perhaps not connected
+   //to the existing distribution function in the cell.
+   //- All cells update and communicate their lists of content blocks
+   //- Only cells which were accerelated on this step need to be adjusted (blocks removed or added).
+   //- Not done here on last step (done after loop)
+   if(step < (globalMaxSubcycles - 1)) adjustVelocityBlocks(mpiGrid, propagatedCells, false, popID);
 }
 
 /** Accelerate all particle populations to new time t+dt. 
