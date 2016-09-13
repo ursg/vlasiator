@@ -167,7 +167,7 @@ namespace vmesh {
    }
    
    template<typename GID,typename LID> inline
-   GID VelocityMesh<GID,LID>::findBlockDown(uint8_t& refLevel,GID cellIndices[3]) const {
+   GID VelocityMesh<GID,LID>::findBlockDown(uint8_t& ,GID cellIndices[3]) const {
       // Calculate i/j/k indices of the block that would own the cell:
       GID i_block = cellIndices[0] / meshParameters[meshID].blockLength[0];
       GID j_block = cellIndices[1] / meshParameters[meshID].blockLength[1];
@@ -253,12 +253,12 @@ namespace vmesh {
    }
 
    template<typename GID,typename LID> inline
-   const Real* VelocityMesh<GID,LID>::getBlockSize(const uint8_t& refLevel) const {
+   const Real* VelocityMesh<GID,LID>::getBlockSize(const uint8_t& ) const {
       return meshParameters[meshID].blockSize;
    }
    
    template<typename GID,typename LID> inline
-   bool VelocityMesh<GID,LID>::getBlockSize(const GID& globalID,Real size[3]) const {
+   bool VelocityMesh<GID,LID>::getBlockSize(const GID& ,Real size[3]) const {
       size[0] = meshParameters[meshID].blockSize[0];
       size[1] = meshParameters[meshID].blockSize[1];
       size[2] = meshParameters[meshID].blockSize[2];
@@ -266,12 +266,12 @@ namespace vmesh {
    }
    
    template<typename GID,typename LID> inline
-   const Real* VelocityMesh<GID,LID>::getCellSize(const uint8_t& refLevel) const {
+   const Real* VelocityMesh<GID,LID>::getCellSize(const uint8_t& ) const {
       return meshParameters[meshID].cellSize;
    }
 
    template<typename GID,typename LID> inline
-   bool VelocityMesh<GID,LID>::getCellSize(const GID& globalID,Real size[3]) const {
+   bool VelocityMesh<GID,LID>::getCellSize(const GID& ,Real size[3]) const {
       size[0] = meshParameters[meshID].cellSize[0];
       size[1] = meshParameters[meshID].cellSize[1];
       size[2] = meshParameters[meshID].cellSize[2];
@@ -279,7 +279,7 @@ namespace vmesh {
    }
    
    template<typename GID,typename LID> inline
-   void VelocityMesh<GID,LID>::getChildren(const GID& globalID,std::vector<GID>& children) const {
+   void VelocityMesh<GID,LID>::getChildren(const GID& ,std::vector<GID>& children) const {
       children.clear();
       return;
    }
@@ -296,7 +296,7 @@ namespace vmesh {
    }
 
    template<typename GID,typename LID> inline
-   GID VelocityMesh<GID,LID>::getGlobalID(const uint8_t& refLevel,const Real* coords) const {
+   GID VelocityMesh<GID,LID>::getGlobalID(const uint8_t& ,const Real* coords) const {
       if (coords[0] < meshParameters[meshID].meshMinLimits[0] || coords[0] >= meshParameters[meshID].meshMaxLimits[0] ||
          (coords[1] < meshParameters[meshID].meshMinLimits[1] || coords[1] >= meshParameters[meshID].meshMaxLimits[1] ||
           coords[2] < meshParameters[meshID].meshMinLimits[2] || coords[2] >= meshParameters[meshID].meshMaxLimits[2])) {
@@ -314,7 +314,7 @@ namespace vmesh {
    }
    
    template<typename GID,typename LID> inline
-   GID VelocityMesh<GID,LID>::getGlobalID(const uint8_t& refLevel,LID indices[3]) const {
+   GID VelocityMesh<GID,LID>::getGlobalID(const uint8_t& ,LID indices[3]) const {
       if (indices[0] >= meshParameters[meshID].gridLength[0]) return invalidGlobalID();
       if (indices[1] >= meshParameters[meshID].gridLength[1]) return invalidGlobalID();
       if (indices[2] >= meshParameters[meshID].gridLength[2]) return invalidGlobalID();
@@ -323,7 +323,7 @@ namespace vmesh {
    }
    
    template<typename GID,typename LID> inline
-   GID VelocityMesh<GID,LID>::getGlobalID(const uint32_t& refLevel,const LID& i,const LID& j,const LID& k) const {
+   GID VelocityMesh<GID,LID>::getGlobalID(const uint32_t& ,const LID& i,const LID& j,const LID& k) const {
       if (i >= meshParameters[meshID].gridLength[0] || j >= meshParameters[meshID].gridLength[1] || k >= meshParameters[meshID].gridLength[2]) {
          return invalidGlobalID();
       }
@@ -332,7 +332,7 @@ namespace vmesh {
    }
    
    template<typename GID,typename LID> inline
-   GID VelocityMesh<GID,LID>::getGlobalIndexOffset(const uint8_t& refLevel) {
+   GID VelocityMesh<GID,LID>::getGlobalIndexOffset(const uint8_t& ) {
       return 0;
    }
    
@@ -342,7 +342,7 @@ namespace vmesh {
    }
 
    template<typename GID,typename LID> inline
-   const LID* VelocityMesh<GID,LID>::getGridLength(const uint8_t& refLevel) const {
+   const LID* VelocityMesh<GID,LID>::getGridLength(const uint8_t& ) const {
       return meshParameters[meshID].gridLength;
    }
    
@@ -463,7 +463,7 @@ namespace vmesh {
    }
    
    template<typename GID,typename LID> inline
-   uint8_t VelocityMesh<GID,LID>::getRefinementLevel(const GID& globalID) const {
+   uint8_t VelocityMesh<GID,LID>::getRefinementLevel(const GID& ) const {
       return 0;
    }
 
@@ -490,12 +490,12 @@ namespace vmesh {
    }
    
    template<typename GID,typename LID> inline
-   bool VelocityMesh<GID,LID>::hasChildren(const GID& globalID) const {
+   bool VelocityMesh<GID,LID>::hasChildren(const GID& ) const {
       return false;
    }
 
    template<typename GID,typename LID> inline
-   GID VelocityMesh<GID,LID>::hasGrandParent(const GID& globalID) const {
+   GID VelocityMesh<GID,LID>::hasGrandParent(const GID& ) const {
       return invalidGlobalID();
    }
       

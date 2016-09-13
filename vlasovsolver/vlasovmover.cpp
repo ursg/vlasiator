@@ -233,8 +233,6 @@ void calculateSpatialTranslation(
 void calculateSpatialTranslation(
         dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
         creal dt) {
-   typedef Parameters P;
-   
    phiprof::start("semilag-trans");
 
    const vector<CellID>& localCells = getLocalCells();

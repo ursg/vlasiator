@@ -9,6 +9,8 @@ bool map3DCuda(Realf **blockDatas,
                const Realf blockSize[3],
                const vmesh::LocalID gridLength[3],
                const Realf gridMinLimits[3]){
+   bool success = true;
+   
    cudaStream_t streams[nCells];
    vmesh::VelocityMeshCuda<vmesh::GlobalID, vmesh::LocalID>* d_sourceVmesh[nCells];
    vmesh::VelocityMeshCuda<vmesh::GlobalID, vmesh::LocalID>* h_sourceVmesh[nCells];
@@ -48,5 +50,7 @@ bool map3DCuda(Realf **blockDatas,
    }
 
    //cudaDeviceSynchronize();
+   
+   return success;
 }
 
