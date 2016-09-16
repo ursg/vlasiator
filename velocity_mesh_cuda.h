@@ -114,7 +114,7 @@ namespace vmesh {
 
    template<typename GID, typename LID> __global__ void prepareSort(VelocityMeshCuda<GID,LID> *d_vmesh, uint dimension);
    template<typename GID, typename LID> __global__ void prepareColumnCompute(VelocityMeshCuda<GID,LID> *d_vmesh);
-   template<typename GID, typename LID> __global__ void determineFilledBlocks(VelocityMeshCuda<GID,LID> *d_vmesh);
+   template<typename GID, typename LID> __global__ void determineFilledBlocks(VelocityMeshCuda<GID,LID> *d_vmesh, float threshold);
    template<typename GID, typename LID> __global__ void determineFilledNeighbours(VelocityMeshCuda<GID,LID> *d_vmesh);
 
 /*----------------------------------------CLASS functions ------------------------------------------*/
@@ -548,14 +548,14 @@ namespace vmesh {
    }
 
    // Set (or clear) the flag indicating whether a block is filled (= data != 0)
-   template<typename GID, typename LID> __global__ void determineFilledBlocks(VelocityMeshCuda<GID,LID> *d_vmesh) {
+   template<typename GID, typename LID> __global__ void determineFilledBlocks(VelocityMeshCuda<GID,LID> *d_vmesh, float threshold) {
       int id = blockIdx.x * blockDim.x + threadIdx.x;
       if (id < d_vmesh->nBlocks ){
          d_vmesh->hasContent[id] = false;
          d_vmesh->hasFilledNeighbour[id] = false; 
          for(int i=0; i< WID3; i++) {
             //TODO: Should the thresholding thing be done here?
-            if(d_vmesh->data[WID3*id + i] != 0) {
+            if(d_vmesh->data[WID3*id + i] > threshold) {
                d_vmesh->hasContent[id] = true;
                d_vmesh->hasFilledNeighbour[id] = true; // If a block is filled, this also counts as having a filled neighbour
                //printf("Block %d has content.\n", id);
@@ -761,29 +761,43 @@ namespace vmesh {
       //h_vmesh will now be deallocated
    }
 
-   template<typename GID, typename LID> __host__ void adjustVelocityBlocks(VelocityMeshCuda<GID,LID> *d_vmesh, VelocityMeshCuda<GID,LID> *h_vmesh, cudaStream_t stream) {
-      int cuBlockSize = 512; 
-      int cuGridSize = 1 + h_vmesh->size() / cuBlockSize; // value determine by block size and total work
+   template<typename GID, typename LID> __host__ void adjustVelocityBlocks(VelocityMeshCuda<GID,LID> **d_vmesh, VelocityMeshCuda<GID,LID> **h_vmesh, float threshold, cudaStream_t* stream, uint nCells) {
 
-      // Mark full blocks
-      fprintf(stderr,"      `-> determineFilledBlocks\n");
-      determineFilledBlocks<<<cuGridSize, cuBlockSize, 0, stream>>>(d_vmesh);
-      cudaDeviceSynchronize();
+      for(uint i=0; i<nCells; i++) {
+         int cuBlockSize = 512; 
+         int cuGridSize = 1 + h_vmesh[i]->size() / cuBlockSize; // value determine by block size and total work
 
-      // Mark their vspace neighbours
-      // (also mark themselves as having neighbours, to make things easier)
-      fprintf(stderr,"      `-> determineFilledNeighbours\n");
-      determineFilledNeighbours<<<cuGridSize, cuBlockSize, 0, stream>>>(d_vmesh);
-      cudaDeviceSynchronize();
+         // Mark full blocks
+         fprintf(stderr,"      `-> determineFilledBlocks\n");
+         determineFilledBlocks<<<cuGridSize, cuBlockSize, 0, stream[i]>>>(d_vmesh[i], threshold);
+         cudaDeviceSynchronize();
 
-      //TODO: Do above for all local velocity blocks, then communicate ghost cells, then return here
-      // Copy full blocks over from all 6 neighbours, mark those cells as having neighbours  
-      
+         // Mark their vspace neighbours
+         // (also mark themselves as having neighbours, to make things easier)
+         fprintf(stderr,"      `-> determineFilledNeighbours\n");
+         determineFilledNeighbours<<<cuGridSize, cuBlockSize, 0, stream[i]>>>(d_vmesh[i]);
+         cudaDeviceSynchronize();
 
-      // Remove all blocks that do not have the hasFilledNeighbour flag set
-      //GID* newBlockIDEnd = thrust::remove_if(h_vmesh->blockIDs, h_vmesh->blockIDs + h_vmesh->nBlocks, h_vmesh->hasFilledNeighbour, isZero());
-      //Block_t* newBlockDataEnd = thrust::remove_if((Block_t*)h_vmesh->data, (Block_t*)h_vmesh->data + h_vmesh->nBlocks, h_vmesh->hasFilledNeighbour, isZero());
-      cudaDeviceSynchronize();
+         //TODO: Do above for all local velocity blocks, then communicate ghost cells, then return here
+         // Copy full blocks over from all 6 neighbours, mark those cells as having neighbours  
+
+
+         // Remove all blocks that do not have the hasFilledNeighbour flag set
+         thrust::device_ptr<GID> thrustBlockIDs(h_vmesh[i]->blockIDs);
+         thrust::device_ptr<GID> thrustBlockIDEnd(h_vmesh[i]->blockIDs + h_vmesh[i]->nBlocks);
+         thrust::device_ptr<bool> thrustHasFilledNeighbour(h_vmesh[i]->hasFilledNeighbour);
+         thrust::device_ptr<GID> newBlockIDEnd = thrust::remove_if(thrustBlockIDs, thrustBlockIDEnd, thrustHasFilledNeighbour, isZero());
+
+         thrust::device_ptr<Block_t> thrustData((Block_t*)h_vmesh[i]->data);
+         thrust::device_ptr<Block_t> thrustDataEnd((Block_t*)h_vmesh[i]->data + h_vmesh[i]->nBlocks);
+         thrust::device_ptr<Block_t> newBlockDataEnd = thrust::remove_if(thrustData, thrustDataEnd, thrustHasFilledNeighbour, isZero());
+         cudaDeviceSynchronize();
+
+         fprintf(stderr, "Before block adjustment, block number is %d\n", h_vmesh[i]->nBlocks);
+         h_vmesh[i]->nBlocks = newBlockIDEnd - thrustBlockIDs;
+         cudaMemcpy(&d_vmesh[i]->nBlocks, &h_vmesh[i]->nBlocks, sizeof(h_vmesh[i]->nBlocks), cudaMemcpyHostToDevice);
+         fprintf(stderr, "After block adjustment, block number is %d\n", h_vmesh[i]->nBlocks);
+      }
 
       // Watch out: the column-sorted arrays have now been invalidated, since the unordered array entries can have shifted.
    }

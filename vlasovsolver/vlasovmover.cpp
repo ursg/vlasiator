@@ -427,7 +427,7 @@ void calculateAcceleration(const int& popID,const int& globalMaxSubcycles,const 
 			   nBlocks, 
 			   intersections,
 			   propagatedCells.size(),
-			   blockSize, gridLength, gridMinLimits);
+			   blockSize, gridLength, gridMinLimits, P::sparseMinValue);
 	   phiprof::stop("compute-cuda-map3D");
 	   // TODO - glue for putting the accelerated data back to the spatial cells     
 	   delete[] nBlocks;
