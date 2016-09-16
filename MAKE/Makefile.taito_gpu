@@ -29,7 +29,7 @@ LIB_CUDA =  -L$(CUDALIB) -lcudart -lstdc++
 
 # Cuda
 CUDACMP = nvcc
-NVCCFLAGS = -O3 --restrict -gencode arch=compute_35,code=sm_35 -gencode arch=compute_37,code=sm_37 
+NVCCFLAGS = -g -O3 --restrict -gencode arch=compute_35,code=sm_35 -gencode arch=compute_37,code=sm_37 
 
 # BOOST_VERSION = current trilinos version
 # ZOLTAN_VERSION = current trilinos verson
