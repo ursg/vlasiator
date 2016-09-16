@@ -60,12 +60,12 @@ namespace vmesh {
       uint nColumns;
       uint sortDimension;    /**< dimension (0,1,2) along which blocks are sorted*/
       Realf *data;  
-      GID *blockIDs;
-      bool *hasContent;            /**< Flag denoting whether this cell is filled (for block adjustment) */
-      bool *hasFilledNeighbour;    /**< Flag denoting whether this cell has a neighbour that is filled (for block adjustment) */
-      GID *sortedBlockMappedGID;   /**< Array for storing rotated/mapped blockIDs where the dimenionality is taken into account */
-      LID *sortedBlockLID;         /**< After sorting into columns, this tells the position ( local ID) of a block in the unsorted data array */
-      LID *columnStartLID;         /**< The start LID of each column in sorted data.*/
+      GID   *blockIDs;
+      bool  *hasContent;            /**< Flag denoting whether this cell is filled (for block adjustment) */
+      bool  *hasFilledNeighbour;    /**< Flag denoting whether this cell has a neighbour that is filled (for block adjustment) */
+      GID   *sortedBlockMappedGID;   /**< Array for storing rotated/mapped blockIDs where the dimenionality is taken into account */
+      LID   *sortedBlockLID;         /**< After sorting into columns, this tells the position ( local ID) of a block in the unsorted data array */
+      LID   *columnStartLID;         /**< The start LID of each column in sorted data.*/
    };
    
    
@@ -163,6 +163,7 @@ namespace vmesh {
       nColumns = 0; //not yet computed
       //cudaMalloc blocks...
       cudaMalloc(&data, nBlocks * WID3 * sizeof(Realf));
+      cudaMemset(&data, 0,  nBlocks * WID3 * sizeof(Realf));
       cudaMalloc(&blockIDs, nBlocks * sizeof(GID));
       cudaMalloc(&sortedBlockMappedGID, nBlocks * sizeof(GID));
       cudaMalloc(&sortedBlockLID, nBlocks * sizeof(LID));
@@ -257,7 +258,7 @@ namespace vmesh {
             blockMappedGID = block;
             break;
          case 1: {
-            // Do operation: 
+            // Do operatioon: 
             //   block = x + y*x_max + z*y_max*x_max 
             //=> block' = block - (x + y*x_max) + y + x*y_max = x + y*x_max + z*y_max*x_max - (x + y*x_max) + y + x*y_max
             //          = y + x*y_max + z*y_max*x_max
@@ -403,14 +404,41 @@ namespace vmesh {
          
 
       }   
-         
+      
    }  
+
+   template<typename GID, typename LID> __global__ void setTargetGridBlockMetadata(VelocityMeshCuda<GID,LID> *d_vmesh,
+                                                                                   int targetnColumns,
+                                                                                   LID *targetColumnLength,
+                                                                                   GID *targetColumnFirstBlock,
+                                                                                   uint dimension){
+      
+      int tid = blockIdx.x * blockDim.x + threadIdx.x;
+      d_vmesh->sortDimension = dimension;
+      d_vmesh->nColumns = targetnColumns;
+
+      if (tid < targetnColumns){         
+         LID indicesBlock[3];
+         d_vmesh->getIndices(targetColumnFirstBlock[tid], indicesBlock);
+         
+         d_vmesh->columnStartLID[tid] = 0;
+         for(int c = 0; c < tid; c++)
+            d_vmesh->columnStartLID[tid] += targetColumnLength[c];
+         
+         for(int i = 0; i < targetColumnLength[tid]; i++) {
+            d_vmesh->blockIDs[d_vmesh->columnStartLID[tid] + i] =  d_vmesh->getGlobalID(indicesBlock);
+            d_vmesh->sortedBlockMappedGID[d_vmesh->columnStartLID[tid] + i] =  
+               d_vmesh->blockMapGID(d_vmesh->blockIDs[d_vmesh->columnStartLID[tid] + i], dimension);
+            d_vmesh->sortedBlockLID[d_vmesh->columnStartLID[tid] + i] =  d_vmesh->columnStartLID[tid] + i;
+            indicesBlock[dimension]++;
+         }
+      }
+   }
    
 
 
-
    template<typename GID,typename LID>
-   __host__ void createTargetMesh(VelocityMeshCuda<GID,LID>** d_targetVmesh, VelocityMeshCuda<GID,LID>** h_targetVmesh,
+      __host__ void createTargetMesh(VelocityMeshCuda<GID,LID>** d_targetVmesh, VelocityMeshCuda<GID,LID>** h_targetVmesh,
                                   VelocityMeshCuda<GID,LID>* d_sourceVmesh,  VelocityMeshCuda<GID,LID>*  h_sourceVmesh,
                                   Real intersection,
                                   Real intersection_di,
@@ -444,12 +472,27 @@ namespace vmesh {
 //      cudaDeviceSynchronize();
       
 
-      printf("Target n blocks %d n columns %d\n",targetnBlocks, h_sourceVmesh->nColumns );
+      printf("Target n blocks %d n columns %d\n", targetnBlocks, h_sourceVmesh->nColumns );
       
-/*      
-      createVelocityMeshCuda(d_targetVmesh, h_targetVmesh, targetnBlocks, 
-                             d_sourceVmesh->gridLength, d_sourceVmesh->blockSize, d_sourceVmesh->gridMinLimits);
-*/    
+      
+      /*allocate space for new targetVelocityMesh, and sets the new data to
+       * zero. Also sets number of blocks*/
+/*
+      createVelocityMeshCuda(d_targetVmesh, 
+                             h_targetVmesh, 
+                             targetnBlocks, 
+                             d_sourceVmesh->gridLength, 
+                             d_sourceVmesh->blockSize, 
+                             d_sourceVmesh->gridMinLimits);
+
+
+      vmesh::setTargetGridBlockMetadata<<<cuGridSize, cuBlockSize, 0, stream>>>(*d_targetVmesh, 
+                                                                                h_sourceVmesh->nColumns,
+                                                                                targetColumnLengths,
+                                                                                targetColumnFirstBlock,
+                                                                                dimension); 
+      
+*/
       cudaFree(targetColumnLengths);
       cudaFree(targetColumnFirstBlock);   
    }
@@ -460,7 +503,7 @@ namespace vmesh {
    
    template<typename GID,typename LID> __host__ void uploadMeshData(VelocityMeshCuda<GID,LID>* d_vmesh, VelocityMeshCuda<GID,LID>* h_vmesh, 
                                                                     const Realf *h_data, const  GID *h_blockIDs, cudaStream_t stream) {
-      cudaMemcpyAsync(h_vmesh->data, h_data, h_vmesh->size() *  WID3 * sizeof(Realf), cudaMemcpyHostToDevice, stream);
+      cudaMemcpyAsync(h_vmesh->data, h_data, h_vmesh->size() * WID3 * sizeof(Realf), cudaMemcpyHostToDevice, stream);
       cudaMemcpyAsync(h_vmesh->blockIDs, h_blockIDs, h_vmesh->size() * sizeof(GID), cudaMemcpyHostToDevice, stream);
    }
 
