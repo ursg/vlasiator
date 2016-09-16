@@ -36,6 +36,11 @@
 
 
 namespace vmesh {
+
+   struct Block_t {
+       Realf cells[WID3];
+   };
+
    template<typename GID,typename LID>
    class VelocityMeshCuda {
    public:
@@ -780,7 +785,11 @@ namespace vmesh {
       
 
       // Remove all blocks that do not have the hasFilledNeighbour flag set
+      //GID* newBlockIDEnd = thrust::remove_if(h_vmesh->blockIDs, h_vmesh->blockIDs + h_vmesh->nBlocks, h_vmesh->hasFilledNeighbour, isZero());
+      //Block_t* newBlockDataEnd = thrust::remove_if((Block_t*)h_vmesh->data, (Block_t*)h_vmesh->data + h_vmesh->nBlocks, h_vmesh->hasFilledNeighbour, isZero());
+      cudaDeviceSynchronize();
 
+      // Watch out: the column-sorted arrays have now been invalidated, since the unordered array entries can have shifted.
    }
 
 }; // namespace vmesh
