@@ -482,15 +482,15 @@ namespace vmesh {
       
       /*allocate space for new targetVelocityMesh, and sets the new data to
        * zero. Also sets number of blocks*/
-/*
+
       createVelocityMeshCuda(d_targetVmesh, 
                              h_targetVmesh, 
                              targetnBlocks, 
-                             d_sourceVmesh->gridLength, 
-                             d_sourceVmesh->blockSize, 
-                             d_sourceVmesh->gridMinLimits);
+                             h_sourceVmesh->gridLength, 
+                             h_sourceVmesh->blockSize, 
+                             h_sourceVmesh->gridMinLimits);
 
-
+/*
       vmesh::setTargetGridBlockMetadata<<<cuGridSize, cuBlockSize, 0, stream>>>(*d_targetVmesh, 
                                                                                 h_sourceVmesh->nColumns,
                                                                                 targetColumnLengths,
