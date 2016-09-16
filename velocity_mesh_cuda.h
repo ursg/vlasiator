@@ -795,9 +795,9 @@ namespace vmesh {
       thrust::device_ptr<Block_t> newBlockDataEnd = thrust::remove_if(thrustData, thrustDataEnd, thrustHasFilledNeighbour, isZero());
       cudaDeviceSynchronize();
 
-      // TODO: update nBlocks
       fprintf(stderr, "Before block adjustment, block number is %d\n", h_vmesh->nBlocks);
       h_vmesh->nBlocks = newBlockIDEnd - thrustBlockIDs;
+      cudaMemcpy(&d_vmesh->nBlocks, &h_vmesh->nBlocks, sizeof(h_vmesh->nBlocks), cudaMemcpyHostToDevice);
       fprintf(stderr, "After block adjustment, block number is %d\n", h_vmesh->nBlocks);
 
       // Watch out: the column-sorted arrays have now been invalidated, since the unordered array entries can have shifted.
