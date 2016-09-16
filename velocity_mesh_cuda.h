@@ -407,8 +407,8 @@ namespace vmesh {
          
          
          targetColumnLength[id] = indicesEnd[2] - indicesStart[2] + 1;
-//         printf("Column %d nColumns %d  target-length %d source-length %d startblock %d endblock %d zmin %g zmax %g intersections %g %g %g %g\n", 
-//                id, d_vmesh->nColumns, targetColumnLength[id], d_vmesh->columnSize(id), sourceStartBlock, sourceEndBlock,  zMin, zMax, intersection, intersection_di, intersection_dj, intersection_dk );
+         printf("Column %d nColumns %d  target-length %d source-length %d startblock %d endblock %d zmin %g zmax %g intersections %g %g %g %g\n", 
+                id, d_vmesh->nColumns, targetColumnLength[id], d_vmesh->columnSize(id), sourceStartBlock, sourceEndBlock,  zMin, zMax, intersection, intersection_di, intersection_dj, intersection_dk );
          //Transpose indices back to original coordinate system
          d_vmesh->transposeIndices(indicesStart, dimension );
          d_vmesh->transposeIndices(indicesEnd, dimension );
@@ -428,9 +428,12 @@ namespace vmesh {
                                                                                    uint dimension){
       
       int tid = blockIdx.x * blockDim.x + threadIdx.x;
-      d_vmesh->sortDimension = dimension;
-      d_vmesh->nColumns = targetnColumns;
-
+      if(tid == 0) {
+         d_vmesh->sortDimension = dimension;
+         d_vmesh->nColumns = targetnColumns;
+      }
+      
+      
       if (tid < targetnColumns){         
          LID indicesBlock[3];
          d_vmesh->getIndices(targetColumnFirstBlock[tid], indicesBlock);
@@ -447,6 +450,8 @@ namespace vmesh {
             indicesBlock[dimension]++;
          }
       }
+      
+      //TODO - copy to host
    }
    
 
@@ -476,19 +481,11 @@ namespace vmesh {
                                                                               intersection_dj,
                                                                               intersection_dk,
                                                                               dimension); 
-      
-      
       thrust::device_ptr<LID> thrustTargetColumnLengths(targetColumnLengths);
-      
-      
       LID targetnBlocks = thrust::reduce(thrust::cuda::par.on(stream),
                                          thrustTargetColumnLengths, thrustTargetColumnLengths + h_sourceVmesh->nColumns, (LID)0);
 //      cudaDeviceSynchronize();
-      
-
       printf("Target n blocks %d n columns %d\n", targetnBlocks, h_sourceVmesh->nColumns );
-      
-      
       /*allocate space for new targetVelocityMesh, and sets the new data to
        * zero. Also sets number of blocks*/
 
@@ -498,14 +495,13 @@ namespace vmesh {
                              h_sourceVmesh->gridLength, 
                              h_sourceVmesh->blockSize, 
                              h_sourceVmesh->gridMinLimits);
-
-
       vmesh::setTargetGridBlockMetadata<<<cuGridSize, cuBlockSize, 0, stream>>>(*d_targetVmesh, 
                                                                                 h_sourceVmesh->nColumns,
                                                                                 targetColumnLengths,
                                                                                 targetColumnFirstBlock,
                                                                                 dimension); 
-      
+      (*h_targetVmesh)->sortDimension = dimension;
+      (*h_targetVmesh)->nColumns = h_sourceVmesh->nColumns;
 
       cudaFree(targetColumnLengths);
       cudaFree(targetColumnFirstBlock);   
