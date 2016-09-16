@@ -774,18 +774,18 @@ namespace vmesh {
          // Mark full blocks
          fprintf(stderr,"      `-> determineFilledBlocks\n");
          determineFilledBlocks<<<cuGridSize, cuBlockSize, 0, stream[i]>>>(d_vmesh[i], threshold);
-         cudaDeviceSynchronize();
 
          // Mark their vspace neighbours
          // (also mark themselves as having neighbours, to make things easier)
          fprintf(stderr,"      `-> determineFilledNeighbours\n");
          determineFilledNeighbours<<<cuGridSize, cuBlockSize, 0, stream[i]>>>(d_vmesh[i]);
-         cudaDeviceSynchronize();
+      }
 
-         //TODO: Do above for all local velocity blocks, then communicate ghost cells, then return here
-         // Copy full blocks over from all 6 neighbours, mark those cells as having neighbours  
+      cudaDeviceSynchronize();
 
+      // TODO: Mark spatial neighbours' occupied blocks here, before doing the actual adjustment
 
+      for(uint i=0; i<nCells; i++) {
          // Remove all blocks that do not have the hasFilledNeighbour flag set
          thrust::device_ptr<GID> thrustBlockIDs(h_vmesh[i]->blockIDs);
          thrust::device_ptr<GID> thrustBlockIDEnd(h_vmesh[i]->blockIDs + h_vmesh[i]->nBlocks);

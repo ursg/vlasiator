@@ -88,6 +88,7 @@ bool map3DCuda(Realf **blockDatas,
       fprintf(stderr," `-> adjustVelocityBlocks\n");
    }
 
+   // Adjust (add or delete) velocity blocks in all spatial cells.
    vmesh::adjustVelocityBlocks(d_sourceVmesh, h_sourceVmesh, sparsityThreshold, streams, nCells);
    
    for (int i = 0; i < nCells; i++) {
