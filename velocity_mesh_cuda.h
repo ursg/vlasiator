@@ -36,6 +36,11 @@
 
 
 namespace vmesh {
+
+   struct Block_t {
+       Realf cells[WID3];
+   };
+
    template<typename GID,typename LID>
    class VelocityMeshCuda {
    public:
@@ -293,25 +298,29 @@ namespace vmesh {
    // Sped up by iterating through columns, and finding the one containing this gid first.
    template<typename GID, typename LID> __device__ LID VelocityMeshCuda<GID,LID>::findLIDforGID(GID blockMappedGID) {
 
-      // Transform GID into the current column direction
-      //GID blockMappedGID = blockMapGID(block, sortDimension);
-
-      for(int c=0; c<nColumns; c++) {
-         LID columnStart = sortedBlockMappedGID[columnStartLID[c]];
+      for(uint c=0; c<nColumns; c++) {
+         GID columnStart = sortedBlockMappedGID[columnStartLID[c]];
          // If even this column's start is already beyond our target, we can exit early.
          if(columnStart > blockMappedGID) {
             return INVALID_LOCALID;
          }
 
+         uint delta = blockMappedGID - columnStart;
+
          // If this column contains our target block, return it!
-         if(columnSize(columnStartLID[c]) > blockMappedGID - columnStart) {
-            LID sortedIndex = columnStartLID[c] + blockMappedGID - columnStart;
+         if(columnSize(c) > delta) {
+            LID sortedIndex = columnStartLID[c] + delta;
 
             // Sanity check: did we actually find the correct block?
             if(sortedBlockMappedGID[sortedIndex] != blockMappedGID) {
-               printf("findLIDforGID: found block has wrong blockMappedGID!\n");
+               printf("findLIDforGID: found block has wrong blockMappedGID (%d vs %d)!\n", blockMappedGID, sortedBlockMappedGID[sortedIndex]);
+               printf("Column %d at LID %d is (length %d, delta was %d):\n  #:   LID   sortedBlockMappedGID\n", c, columnStartLID[c], columnSize(c), delta);
+               for(uint i=0; i < columnSize(c); i++) {
+                  printf("  %d: %d %d\n", i, columnStartLID[c]+i, sortedBlockMappedGID[columnStartLID[c]+i]);
+               }
+               printf("- - -\n");
             }
-            return sortedBlockLID[ columnStartLID[c] + blockMappedGID - columnStart ];
+            return sortedBlockLID[ sortedIndex ];
          }
       }
 
@@ -776,7 +785,11 @@ namespace vmesh {
       
 
       // Remove all blocks that do not have the hasFilledNeighbour flag set
+      //GID* newBlockIDEnd = thrust::remove_if(h_vmesh->blockIDs, h_vmesh->blockIDs + h_vmesh->nBlocks, h_vmesh->hasFilledNeighbour, isZero());
+      //Block_t* newBlockDataEnd = thrust::remove_if((Block_t*)h_vmesh->data, (Block_t*)h_vmesh->data + h_vmesh->nBlocks, h_vmesh->hasFilledNeighbour, isZero());
+      cudaDeviceSynchronize();
 
+      // Watch out: the column-sorted arrays have now been invalidated, since the unordered array entries can have shifted.
    }
 
 }; // namespace vmesh
