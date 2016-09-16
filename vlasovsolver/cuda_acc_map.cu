@@ -86,8 +86,9 @@ bool map3DCuda(Realf **blockDatas,
 //      vmesh::sortVelocityBlocksInColumns(d_sourceVmesh[i], h_sourceVmesh[i], 1, streams[i]);
       cudaDeviceSynchronize();
       fprintf(stderr," `-> adjustVelocityBlocks\n");
-      vmesh::adjustVelocityBlocks(d_sourceVmesh[i], h_sourceVmesh[i], sparsityThreshold, streams[i]);
    }
+
+   vmesh::adjustVelocityBlocks(d_sourceVmesh, h_sourceVmesh, sparsityThreshold, streams, nCells);
    
    for (int i = 0; i < nCells; i++) {
       vmesh::destroyVelocityMeshCuda(d_sourceVmesh[i], h_sourceVmesh[i]);

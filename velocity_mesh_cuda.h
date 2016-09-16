@@ -765,40 +765,43 @@ namespace vmesh {
       //h_vmesh will now be deallocated
    }
 
-   template<typename GID, typename LID> __host__ void adjustVelocityBlocks(VelocityMeshCuda<GID,LID> *d_vmesh, VelocityMeshCuda<GID,LID> *h_vmesh, float threshold, cudaStream_t stream) {
-      int cuBlockSize = 512; 
-      int cuGridSize = 1 + h_vmesh->size() / cuBlockSize; // value determine by block size and total work
+   template<typename GID, typename LID> __host__ void adjustVelocityBlocks(VelocityMeshCuda<GID,LID> **d_vmesh, VelocityMeshCuda<GID,LID> **h_vmesh, float threshold, cudaStream_t* stream, uint nCells) {
 
-      // Mark full blocks
-      fprintf(stderr,"      `-> determineFilledBlocks\n");
-      determineFilledBlocks<<<cuGridSize, cuBlockSize, 0, stream>>>(d_vmesh, threshold);
-      cudaDeviceSynchronize();
+      for(uint i=0; i<nCells; i++) {
+         int cuBlockSize = 512; 
+         int cuGridSize = 1 + h_vmesh[i]->size() / cuBlockSize; // value determine by block size and total work
 
-      // Mark their vspace neighbours
-      // (also mark themselves as having neighbours, to make things easier)
-      fprintf(stderr,"      `-> determineFilledNeighbours\n");
-      determineFilledNeighbours<<<cuGridSize, cuBlockSize, 0, stream>>>(d_vmesh);
-      cudaDeviceSynchronize();
+         // Mark full blocks
+         fprintf(stderr,"      `-> determineFilledBlocks\n");
+         determineFilledBlocks<<<cuGridSize, cuBlockSize, 0, stream[i]>>>(d_vmesh[i], threshold);
+         cudaDeviceSynchronize();
 
-      //TODO: Do above for all local velocity blocks, then communicate ghost cells, then return here
-      // Copy full blocks over from all 6 neighbours, mark those cells as having neighbours  
-      
+         // Mark their vspace neighbours
+         // (also mark themselves as having neighbours, to make things easier)
+         fprintf(stderr,"      `-> determineFilledNeighbours\n");
+         determineFilledNeighbours<<<cuGridSize, cuBlockSize, 0, stream[i]>>>(d_vmesh[i]);
+         cudaDeviceSynchronize();
 
-      // Remove all blocks that do not have the hasFilledNeighbour flag set
-      thrust::device_ptr<GID> thrustBlockIDs(h_vmesh->blockIDs);
-      thrust::device_ptr<GID> thrustBlockIDEnd(h_vmesh->blockIDs + h_vmesh->nBlocks);
-      thrust::device_ptr<bool> thrustHasFilledNeighbour(h_vmesh->hasFilledNeighbour);
-      thrust::device_ptr<GID> newBlockIDEnd = thrust::remove_if(thrustBlockIDs, thrustBlockIDEnd, thrustHasFilledNeighbour, isZero());
+         //TODO: Do above for all local velocity blocks, then communicate ghost cells, then return here
+         // Copy full blocks over from all 6 neighbours, mark those cells as having neighbours  
 
-      thrust::device_ptr<Block_t> thrustData((Block_t*)h_vmesh->data);
-      thrust::device_ptr<Block_t> thrustDataEnd((Block_t*)h_vmesh->data + h_vmesh->nBlocks);
-      thrust::device_ptr<Block_t> newBlockDataEnd = thrust::remove_if(thrustData, thrustDataEnd, thrustHasFilledNeighbour, isZero());
-      cudaDeviceSynchronize();
 
-      fprintf(stderr, "Before block adjustment, block number is %d\n", h_vmesh->nBlocks);
-      h_vmesh->nBlocks = newBlockIDEnd - thrustBlockIDs;
-      cudaMemcpy(&d_vmesh->nBlocks, &h_vmesh->nBlocks, sizeof(h_vmesh->nBlocks), cudaMemcpyHostToDevice);
-      fprintf(stderr, "After block adjustment, block number is %d\n", h_vmesh->nBlocks);
+         // Remove all blocks that do not have the hasFilledNeighbour flag set
+         thrust::device_ptr<GID> thrustBlockIDs(h_vmesh[i]->blockIDs);
+         thrust::device_ptr<GID> thrustBlockIDEnd(h_vmesh[i]->blockIDs + h_vmesh[i]->nBlocks);
+         thrust::device_ptr<bool> thrustHasFilledNeighbour(h_vmesh[i]->hasFilledNeighbour);
+         thrust::device_ptr<GID> newBlockIDEnd = thrust::remove_if(thrustBlockIDs, thrustBlockIDEnd, thrustHasFilledNeighbour, isZero());
+
+         thrust::device_ptr<Block_t> thrustData((Block_t*)h_vmesh[i]->data);
+         thrust::device_ptr<Block_t> thrustDataEnd((Block_t*)h_vmesh[i]->data + h_vmesh[i]->nBlocks);
+         thrust::device_ptr<Block_t> newBlockDataEnd = thrust::remove_if(thrustData, thrustDataEnd, thrustHasFilledNeighbour, isZero());
+         cudaDeviceSynchronize();
+
+         fprintf(stderr, "Before block adjustment, block number is %d\n", h_vmesh[i]->nBlocks);
+         h_vmesh[i]->nBlocks = newBlockIDEnd - thrustBlockIDs;
+         cudaMemcpy(&d_vmesh[i]->nBlocks, &h_vmesh[i]->nBlocks, sizeof(h_vmesh[i]->nBlocks), cudaMemcpyHostToDevice);
+         fprintf(stderr, "After block adjustment, block number is %d\n", h_vmesh[i]->nBlocks);
+      }
 
       // Watch out: the column-sorted arrays have now been invalidated, since the unordered array entries can have shifted.
    }
