@@ -161,7 +161,8 @@ namespace vmesh {
       nColumns = 0; //not yet computed
       //cudaMalloc blocks...
       cudaMalloc(&data, nBlocks * WID3 * sizeof(Realf));
-      cudaMemset(&data, 0,  nBlocks * WID3 * sizeof(Realf));
+      cudaMemset(data, 0, nBlocks * WID3 * sizeof(Realf));
+
       cudaMalloc(&blockIDs, nBlocks * sizeof(GID));
       cudaMalloc(&sortedBlockMappedGID, nBlocks * sizeof(GID));
       cudaMalloc(&sortedBlockLID, nBlocks * sizeof(LID));
