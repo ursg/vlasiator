@@ -499,14 +499,14 @@ namespace vmesh {
                              h_sourceVmesh->blockSize, 
                              h_sourceVmesh->gridMinLimits);
 
-/*
+
       vmesh::setTargetGridBlockMetadata<<<cuGridSize, cuBlockSize, 0, stream>>>(*d_targetVmesh, 
                                                                                 h_sourceVmesh->nColumns,
                                                                                 targetColumnLengths,
                                                                                 targetColumnFirstBlock,
                                                                                 dimension); 
       
-*/
+
       cudaFree(targetColumnLengths);
       cudaFree(targetColumnFirstBlock);   
    }   
