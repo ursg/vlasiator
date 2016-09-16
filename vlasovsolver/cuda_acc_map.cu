@@ -30,7 +30,9 @@ bool map3DCuda(Realf **blockDatas,
                const uint nCells,
                const Realf blockSize[3],
                const vmesh::LocalID gridLength[3],
-               const Realf gridMinLimits[3]){
+               const Realf gridMinLimits[3],
+               const float sparsityThreshold
+               ){
    fprintf(stderr," - - - Starting map3DCuda - - -\n");
    bool success = true;
    cudaStream_t streams[nCells];
@@ -60,10 +62,6 @@ bool map3DCuda(Realf **blockDatas,
       fprintf(stderr," `-> velocityBlocksInColumns\n");
       vmesh::sortVelocityBlocksInColumns(d_sourceVmesh[i], h_sourceVmesh[i], 2, streams[i]);
       
-      cudaDeviceSynchronize();
-      fprintf(stderr," `-> adjustVelocityBlocks\n");
-      vmesh::adjustVelocityBlocks(d_sourceVmesh[i], h_sourceVmesh[i], streams[i]);
-
       fprintf(stderr," `-> createTargetMesh\n");
       vmesh::createTargetMesh(&(d_targetVmesh[i]), &(h_targetVmesh[i]),
                               d_sourceVmesh[i], h_sourceVmesh[i],
@@ -86,6 +84,9 @@ bool map3DCuda(Realf **blockDatas,
       
 //      vmesh::sortVelocityBlocksInColumns(d_sourceVmesh[i], h_sourceVmesh[i], 0, streams[i]);
 //      vmesh::sortVelocityBlocksInColumns(d_sourceVmesh[i], h_sourceVmesh[i], 1, streams[i]);
+      cudaDeviceSynchronize();
+      fprintf(stderr," `-> adjustVelocityBlocks\n");
+      vmesh::adjustVelocityBlocks(d_sourceVmesh[i], h_sourceVmesh[i], sparsityThreshold, streams[i]);
    }
    
    for (int i = 0; i < nCells; i++) {

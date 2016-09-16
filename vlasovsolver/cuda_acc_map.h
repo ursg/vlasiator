@@ -5,7 +5,8 @@ bool map3DCuda(Realf **blockDatas,
                const uint nCells,
                const Realf blockSize[3],
                const  vmesh::LocalID gridLength[3],
-               const Realf gridMinLimits[3]);
+               const Realf gridMinLimits[3],
+               const float sparsityThreshold);
 
 
 
