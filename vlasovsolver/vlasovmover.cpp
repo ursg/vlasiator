@@ -402,20 +402,20 @@ void calculateAcceleration(const int& popID,const int& globalMaxSubcycles,const 
 		   Transform<Real,3,Affine> bwd_transform= fwd_transform.inverse();
 		   //Map order Z X Y  (support rest later...)   
 		   compute_intersections_1st(mpiGrid[cellID]->get_velocity_mesh(popID), bwd_transform, fwd_transform, 2, 0,
-				   intersections[AccelerationIntersections::Z],
-				   intersections[AccelerationIntersections::Z_DI],
-				   intersections[AccelerationIntersections::Z_DJ],
-				   intersections[AccelerationIntersections::Z_DK]);
+				   intersections[c * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::Z],
+				   intersections[c * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::Z_DI],
+				   intersections[c * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::Z_DJ],
+				   intersections[c * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::Z_DK]);
 		   compute_intersections_2nd(mpiGrid[cellID]->get_velocity_mesh(popID), bwd_transform, fwd_transform, 0, 0,
-				   intersections[AccelerationIntersections::X],
-				   intersections[AccelerationIntersections::X_DI],
-				   intersections[AccelerationIntersections::X_DJ],
-				   intersections[AccelerationIntersections::X_DK]);
+				   intersections[c * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::X],
+				   intersections[c * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::X_DI],
+				   intersections[c * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::X_DJ],
+				   intersections[c * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::X_DK]);
 		   compute_intersections_3rd(mpiGrid[cellID]->get_velocity_mesh(popID), bwd_transform, fwd_transform, 1, 0,
-				   intersections[AccelerationIntersections::Y],
-				   intersections[AccelerationIntersections::Y_DI],
-				   intersections[AccelerationIntersections::Y_DJ],
-				   intersections[AccelerationIntersections::Y_DK]);
+				   intersections[c * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::Y],
+				   intersections[c * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::Y_DI],
+				   intersections[c * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::Y_DJ],
+				   intersections[c * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::Y_DK]);
 	   }  
 
 
