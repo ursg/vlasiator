@@ -17,7 +17,7 @@ __global__ void printOutput(vmesh::VelocityMeshCuda<vmesh::GlobalID, vmesh::Loca
    const vmesh::LocalID columnStart = d_Vmesh->columnStartLID[0];
    const vmesh::LocalID sortedBlockLID = d_Vmesh->sortedBlockLID[columnStart];
    printf("=== %i ===\n", tag);
-   for (uint i=0; i<64; i++) {
+   for (uint i=0; i<64; i+=8) {
       printf("%d_%e\t", i, d_Vmesh->data[sortedBlockLID * WID3 + i]);
    }
    printf("\n============\n");
@@ -53,8 +53,8 @@ bool map3DCuda(Realf **blockDatas,
    
    fprintf(stderr," - - - Meshes created. Now, the loop: - - -\n");
    for (int i = 0; i < nCells; i++) {
-      fprintf(stderr," `-> uploadMeshData\n");
-      vmesh::uploadMeshData(d_sourceVmesh[i], h_sourceVmesh[i], blockDatas[i], blockIDs[i], streams[i]);
+      fprintf(stderr," `-> transferDataHostToDevice\n");
+      vmesh::transferDataHostToDevice(d_sourceVmesh[i], h_sourceVmesh[i], blockDatas[i], blockIDs[i], streams[i]);
      //Order Z X Y
       //DO Z (REMEMBER TO REAORDER INTERSECTIONS FOR OTHER DIMENSIONS)
       fprintf(stderr," `-> velocityBlocksInColumns\n");
@@ -74,13 +74,14 @@ bool map3DCuda(Realf **blockDatas,
                               2, streams[i]);
       printOutput<<<1,1>>>(d_sourceVmesh[i], 0);
       map_1d<<<h_sourceVmesh[i]->nColumns, dim3 (4, 4, 1)>>>(d_sourceVmesh[i],
-                                                             d_targetVmesh[i],
+                                                             d_sourceVmesh[i],
                                                              intersections[i * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::Z],
                                                              intersections[i * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::Z_DI],
                                                              intersections[i * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::Z_DJ],
                                                              intersections[i * AccelerationIntersections::N_INTERSECTIONS + AccelerationIntersections::Z_DK],
                                                              2);
       printOutput<<<1,1>>>(d_sourceVmesh[i], 1);
+      vmesh::transferDataDeviceToHost(d_sourceVmesh[i], h_sourceVmesh[i], blockDatas[i], blockIDs[i], streams[i]);
       cudaDeviceSynchronize();
       
 //      vmesh::sortVelocityBlocksInColumns(d_sourceVmesh[i], h_sourceVmesh[i], 0, streams[i]);
@@ -116,7 +117,7 @@ __global__ void map_1d(vmesh::VelocityMeshCuda<vmesh::GlobalID, vmesh::LocalID>*
       const uint threadIdxBXY = sortedBlockLID * WID3 + threadIdx.x + threadIdx.y * WID;
       
       for (uint kz=0; kz<4; kz++) {
-         d_sourceVmesh->data[threadIdxBXY + kz * WID2] = 2.0 * d_sourceVmesh->data[threadIdxBXY + kz * WID2];
+         d_targetVmesh->data[threadIdxBXY + kz * WID2] = 10.0 * d_sourceVmesh->data[threadIdxBXY + kz * WID2];
       }
    }
    
