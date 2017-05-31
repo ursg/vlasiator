@@ -44,7 +44,7 @@ void compute_spatial_source_neighbors(const dccrg::Dccrg<SpatialCell,dccrg::Cart
 void compute_spatial_target_neighbors(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
                                       const CellID& cellID,const uint dimension,SpatialCell **neighbors);
 void copy_trans_block_data(SpatialCell** source_neighbors,const vmesh::GlobalID blockGID,
-                           Vec* values,const unsigned char* const cellid_transpose,const int& popID);
+                           Vec* values,const unsigned char* const cellid_transpose,const uint popID);
 CellID get_spatial_neighbor(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
                             const CellID& cellID,const bool include_first_boundary_layer,
                             const int spatial_di,const int spatial_dj,const int spatial_dk);
@@ -53,7 +53,7 @@ SpatialCell* get_spatial_neighbor_pointer(const dccrg::Dccrg<SpatialCell,dccrg::
                                           const int spatial_di,const int spatial_dj,const int spatial_dk);
 void store_trans_block_data(SpatialCell** target_neighbors,const vmesh::GlobalID blockGID,
                             Vec* __restrict__ target_values,
-                            const unsigned char* const cellid_transpose,const int& popID);
+                            const unsigned char* const cellid_transpose,const uint popID);
 
 // indices in padded source block, which is of type Vec with VECL
 // element sin each vector. b_k is the block index in z direction in
@@ -87,7 +87,7 @@ bool do_translate_cell(SpatialCell* SC){
 void createTargetGrid(
         dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
         const vector<CellID>& cells,
-        const int& popID) {
+        const uint popID) {
 
    phiprof::start("create-target-grid");
     #pragma omp parallel for
@@ -167,7 +167,7 @@ void zeroTargetGrid(
 void swapTargetSourceGrid(
         dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
         const vector<CellID>& cells,
-        const int& popID) {
+        const uint popID) {
    
     phiprof::start("swap-target-grid");
     for (size_t c=0; c<cells.size(); ++c) {
@@ -362,44 +362,67 @@ inline void copy_trans_block_data(
         const vmesh::GlobalID blockGID,
         Vec* values,
         const unsigned char* const cellid_transpose,
-        const int& popID) {
+        const uint popID) { 
 
-    //  Copy volume averages of this block from all spatial cells:
-    for (int b = -VLASOV_STENCIL_WIDTH; b <= VLASOV_STENCIL_WIDTH; ++b) {
-        SpatialCell* srcCell = source_neighbors[b + VLASOV_STENCIL_WIDTH];
-        const vmesh::LocalID blockLID = srcCell->get_velocity_block_local_id(blockGID,popID);
-        if (blockLID != srcCell->invalid_local_id()) {
-            Realv blockValues[WID3];
-            const Realf* block_data = srcCell->get_data(blockLID,popID);
-            // Copy data to a temporary array and transpose values so that mapping is along k direction.
-            // spatial source_neighbors already taken care of when
-            // creating source_neighbors table. If a normal spatial cell does not
-            // simply have the block, its value will be its null_block which
-            // is fine. This null_block has a value of zero in data, and that
-            // is thus the velocity space boundary
-            for (uint i=0; i<WID3; ++i) {
-                blockValues[i] = block_data[cellid_transpose[i]];
+   /*load pointers to blocks and prefetch them to L1*/
+   Realf* blockDatas[VLASOV_STENCIL_WIDTH * 2 + 1];
+   for (int b = -VLASOV_STENCIL_WIDTH; b <= VLASOV_STENCIL_WIDTH; ++b) {
+      SpatialCell* srcCell = source_neighbors[b + VLASOV_STENCIL_WIDTH];
+      const vmesh::LocalID blockLID = srcCell->get_velocity_block_local_id(blockGID,popID);
+      if (blockLID != srcCell->invalid_local_id()) {
+         blockDatas[b + VLASOV_STENCIL_WIDTH] = srcCell->get_data(blockLID,popID);
+         //prefetch storage pointers to L1
+         _mm_prefetch((char *)(blockDatas[b + VLASOV_STENCIL_WIDTH]), _MM_HINT_T0);
+         _mm_prefetch((char *)(blockDatas[b + VLASOV_STENCIL_WIDTH]) + 64, _MM_HINT_T0);
+         _mm_prefetch((char *)(blockDatas[b + VLASOV_STENCIL_WIDTH]) + 128, _MM_HINT_T0);
+         _mm_prefetch((char *)(blockDatas[b + VLASOV_STENCIL_WIDTH]) + 192, _MM_HINT_T0);
+         if(VPREC  == 8) {
+            //prefetch storage pointers to L1
+            _mm_prefetch((char *)(blockDatas[b + VLASOV_STENCIL_WIDTH]) + 256, _MM_HINT_T0);
+            _mm_prefetch((char *)(blockDatas[b + VLASOV_STENCIL_WIDTH]) + 320, _MM_HINT_T0);
+            _mm_prefetch((char *)(blockDatas[b + VLASOV_STENCIL_WIDTH]) + 384, _MM_HINT_T0);
+            _mm_prefetch((char *)(blockDatas[b + VLASOV_STENCIL_WIDTH]) + 448, _MM_HINT_T0);
+         }
+      }
+      else{
+         blockDatas[b + VLASOV_STENCIL_WIDTH] = NULL;
+      }
+   }
+ 
+   //  Copy volume averages of this block from all spatial cells:
+   for (int b = -VLASOV_STENCIL_WIDTH; b <= VLASOV_STENCIL_WIDTH; ++b) {
+      if(blockDatas[b + VLASOV_STENCIL_WIDTH] != NULL) {
+         Realv blockValues[WID3];
+         const Realf* block_data = blockDatas[b + VLASOV_STENCIL_WIDTH];
+         // Copy data to a temporary array and transpose values so that mapping is along k direction.
+         // spatial source_neighbors already taken care of when
+         // creating source_neighbors table. If a normal spatial cell does not
+         // simply have the block, its value will be its null_block which
+         // is fine. This null_block has a value of zero in data, and that
+         // is thus the velocity space boundary
+         for (uint i=0; i<WID3; ++i) {
+            blockValues[i] = block_data[cellid_transpose[i]];
+         }
+      
+         // now load values into the actual values table..
+         uint offset =0;
+         for (uint k=0; k<WID; ++k) {
+            for(uint planeVector = 0; planeVector < VEC_PER_PLANE; planeVector++){
+               // store data, when reading data from data we swap dimensions 
+               // using precomputed plane_index_to_id and cell_indices_to_id
+               values[i_trans_ps_blockv(planeVector, k, b)].load(blockValues + offset);
+               offset += VECL;
             }
-
-            // now load values into the actual values table..
-            uint offset =0;
-            for (uint k=0; k<WID; ++k) {
-                for(uint planeVector = 0; planeVector < VEC_PER_PLANE; planeVector++){
-                    // store data, when reading data from data we swap dimensions 
-                    // using precomputed plane_index_to_id and cell_indices_to_id
-                    values[i_trans_ps_blockv(planeVector, k, b)].load(blockValues + offset);
-                    offset += VECL;
-                }
+         }
+      } else {
+         uint cellid=0;
+         for (uint k=0; k<WID; ++k) {
+            for(uint planeVector = 0; planeVector < VEC_PER_PLANE; planeVector++) {
+               values[i_trans_ps_blockv(planeVector, k, b)] = Vec(0);
             }
-        } else {
-            uint cellid=0;
-            for (uint k=0; k<WID; ++k) {
-                for(uint planeVector = 0; planeVector < VEC_PER_PLANE; planeVector++) {
-                    values[i_trans_ps_blockv(planeVector, k, b)] = Vec(0);
-                }
-            }
-        }
-    }
+         }
+      }
+   }
 }
 
 /**
@@ -418,45 +441,68 @@ inline void copy_trans_block_data(
  * @param cellid_transpose
  * @param popID ID of the propagated particle species.*/
 inline void store_trans_block_data(
-        SpatialCell** target_neighbors,
-        const vmesh::GlobalID blockGID,
-        Vec* __restrict__ target_values,
-        const unsigned char* const cellid_transpose,
-        const int& popID) {
+   SpatialCell** target_neighbors,
+   const vmesh::GlobalID blockGID,
+   Vec* __restrict__ target_values,
+   const unsigned char* const cellid_transpose,
+   const uint popID) {
+
+
+   /*load pointers to blocks and prefetch them to L1*/
+   Realf* blockDatas[3];
+   for (int b=-1; b<=1; ++b) {
+      blockDatas[b + 1] = NULL;
+
+      if (target_neighbors[b + 1] == INVALID_CELLID) {
+         continue; //do not store to boundary cells or otherwise invalid cells
+      }
+      SpatialCell* spatial_cell = target_neighbors[b + 1];
+      const vmesh::LocalID blockLID = spatial_cell->get_velocity_block_local_id(blockGID,popID);
+      if (blockLID == vmesh::VelocityMesh<vmesh::GlobalID,vmesh::LocalID>::invalidLocalID()) {
+         // block does not exist. If so, we do not create it and add stuff to it here.
+         // We have already created blocks around blocks with content in
+         // spatial sense, so we have no need to create even more blocks here
+         // TODO add loss counter
+         continue;
+      }
+       
+      // get block container for target cells
+      vmesh::VelocityBlockContainer<vmesh::LocalID>& blockContainer = spatial_cell->get_velocity_blocks_temporary();
+      blockDatas[b + 1] = blockContainer.getData(blockLID);
+      //prefetch storage pointers to L1
+      _mm_prefetch((char *)(blockDatas[b + 1]), _MM_HINT_T0);
+      _mm_prefetch((char *)(blockDatas[b + 1]) + 64, _MM_HINT_T0);
+      _mm_prefetch((char *)(blockDatas[b + 1]) + 128, _MM_HINT_T0);
+      _mm_prefetch((char *)(blockDatas[b + 1]) + 192, _MM_HINT_T0);
+      if(VPREC  == 8) {
+         //prefetch storage pointers to L1
+         _mm_prefetch((char *)(blockDatas[b + 1]) + 256, _MM_HINT_T0);
+         _mm_prefetch((char *)(blockDatas[b + 1]) + 320, _MM_HINT_T0);
+         _mm_prefetch((char *)(blockDatas[b + 1]) + 384, _MM_HINT_T0);
+         _mm_prefetch((char *)(blockDatas[b + 1]) + 448, _MM_HINT_T0);
+      }
+   }
    
-    //Store volume averages to target blocks:
-    for (int b=-1; b<=1; ++b) {
-        if (target_neighbors[b + 1] == INVALID_CELLID) {
-            continue; //do not store to boundary cells or otherwise invalid cells
-        }
-        SpatialCell* spatial_cell = target_neighbors[b + 1];
-        const vmesh::LocalID blockLID = spatial_cell->get_velocity_block_local_id(blockGID,popID);
-        if (blockLID == vmesh::VelocityMesh<vmesh::GlobalID,vmesh::LocalID>::invalidLocalID()) {
-            // block does not exist. If so, we do not create it and add stuff to it here.
-            // We have already created blocks around blocks with content in
-            // spatial sense, so we have no need to create even more blocks here
-            // TODO add loss counter
-            continue;
-        }
-
-        // get block container for target cells
-        vmesh::VelocityBlockContainer<vmesh::LocalID>& blockContainer = spatial_cell->get_velocity_blocks_temporary();
-        Realf* block_data = blockContainer.getData(blockLID);
-
-        Realv blockValues[VECL];
-        uint cellid=0;
-        for (uint k=0; k<WID; ++k) {
+   //Store volume averages to target blocks:
+   for (int b=-1; b<=1; ++b) {
+      if( blockDatas[b + 1] != NULL) {
+         Realf* block_data = blockDatas[b + 1];
+         Realv blockValues[VECL];
+         uint cellid=0;
+         for (uint k=0; k<WID; ++k) {
             for(uint planeVector = 0; planeVector < VEC_PER_PLANE; planeVector++){
-                target_values[i_trans_pt_blockv(planeVector, k, b)].store(blockValues);
-                for(uint i = 0; i< VECL; i++){
-                    // store data, when reading data from data we swap dimensions 
-                    // using precomputed plane_index_to_id and cell_indices_to_id
-                    block_data[cellid_transpose[cellid++]] += blockValues[i];
-                }
+               target_values[i_trans_pt_blockv(planeVector, k, b)].store(blockValues);
+               for(uint i = 0; i< VECL; i++){
+                  // store data, when reading data from data we swap dimensions 
+                  // using precomputed plane_index_to_id and cell_indices_to_id
+                  block_data[cellid_transpose[cellid++]] += blockValues[i];
+               }
             }
-        }
-    }
+         }
+      }
+   }
 }
+
 
 /* 
    Here we map from the current time step grid, to a target grid which
@@ -472,7 +518,7 @@ bool trans_map_1d(
         const CellID cellID,
         const uint dimension,
         const Realv dt,
-        const int& popID) {
+        const uint popID) {
     
     // values used with an stencil in 1 dimension, initialized to 0. 
     // Contains a block, and its spatial neighbours in one dimension.
@@ -677,7 +723,7 @@ void update_remote_mapping_contribution(
         dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
         const uint dimension,
         int direction,
-        const int& popID) {
+        const uint popID) {
    
     const vector<CellID> local_cells = mpiGrid.get_cells();
     const vector<CellID> remote_cells = mpiGrid.get_remote_cells_on_process_boundary(VLASOV_SOLVER_NEIGHBORHOOD_ID);

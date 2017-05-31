@@ -37,6 +37,35 @@ using namespace std;
 extern map<CellID,uint> existingCellsFlags;
 
 /*! \brief Low-level helper function.
+ *
+ * Computes the correct combination of speeds to determine the CFL limits.
+ *
+ * It should be in-plane, but we use the complete wave speeds from calculateWaveSpeed??().
+ * 
+ * At the moment it computes the geometric mean of both bulk velocity components
+ * and takes the maximum of that plus either the magnetosonic or the whistler speed.
+ * 
+ * \sa calculateWaveSpeedYZ calculateWaveSpeedXY calculateWaveSpeedZX
+ *
+ * \param v0 Flow in first direction
+ * \param v1 Flow in second direction
+ * \param vA Alfven speed
+ * \param vS Sound speed
+ * \param vW Whistler speed
+ */
+Real calculateCflSpeed(
+   const Real& v0,
+   const Real& v1,
+   const Real& vA,
+   const Real& vS,
+   const Real& vW
+) {
+   const Real v = sqrt(v0*v0 + v1*v1);
+   const Real vMS = sqrt(vA*vA + vS*vS);
+   return max(v + vMS, v + vW);
+}
+
+/*! \brief Low-level helper function.
  * 
  * Computes the magnetosonic speed in the YZ plane. Used in upwinding the electric field X component.
  * 
@@ -56,11 +85,14 @@ extern map<CellID,uint> existingCellsFlags;
  * \param dBzdy dBzdy derivative
  * \param ydir +1 or -1 depending on the interpolation direction in y
  * \param zdir +1 or -1 depending on the interpolation direction in z
- * \param minRho Minimum density allowed from the neighborhood
- * \param maxRho Maximum density allowed from the neighborhood
+ * \param minRhom Minimum mass density allowed from the neighborhood
+ * \param maxRhom Maximum mass density allowed from the neighborhood
  * \param RKCase Element in the enum defining the Runge-Kutta method steps
+ * \param ret_vA Alfven speed returned
+ * \param ret_vS Sound speed returned
+ * \param ret_vW Whistler speed returned
  */
-Real calculateWaveSpeedYZ(
+void calculateWaveSpeedYZ(
    const Real* cp,
    const Real* derivs,
    const Real* nbr_cp,
@@ -73,34 +105,38 @@ Real calculateWaveSpeedYZ(
    const Real& dBzdy,
    const Real& ydir,
    const Real& zdir,
-   const Real& minRho,
-   const Real& maxRho,
-   cint& RKCase
+   const Real& minRhom,
+   const Real& maxRhom,
+   cint& RKCase,
+   Real& ret_vA,
+   Real& ret_vS,
+   Real& ret_vW
 ) {
-   if (Parameters::propagateField == false) return 0.0;
+   if (Parameters::propagateField == false) {
+      return;
+   }
 
    Real A_0, A_X, rhom, p11, p22, p33;
    if(RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
       A_0  = HALF*(nbr_cp[CellParams::PERBX] + nbr_cp[CellParams::BGBX] + cp[CellParams::PERBX] + cp[CellParams::BGBX]);
       A_X  = (nbr_cp[CellParams::PERBX] + nbr_cp[CellParams::BGBX]) - (cp[CellParams::PERBX] + cp[CellParams::BGBX]);
-      rhom = cp[CellParams::RHO] + ydir*HALF*derivs[fs::drhody] + zdir*HALF*derivs[fs::drhodz];
+      rhom = cp[CellParams::RHOM] + ydir*HALF*derivs[fs::drhomdy] + zdir*HALF*derivs[fs::drhomdz];
       p11 = cp[CellParams::P_11] + ydir*HALF*derivs[fs::dp11dy] + zdir*HALF*derivs[fs::dp11dz];
       p22 = cp[CellParams::P_22] + ydir*HALF*derivs[fs::dp22dy] + zdir*HALF*derivs[fs::dp22dz];
       p33 = cp[CellParams::P_33] + ydir*HALF*derivs[fs::dp33dy] + zdir*HALF*derivs[fs::dp33dz];
    } else { // RKCase == RK_ORDER2_STEP1
       A_0  = HALF*(nbr_cp[CellParams::PERBX_DT2] + nbr_cp[CellParams::BGBX] + cp[CellParams::PERBX_DT2] + cp[CellParams::BGBX]);
       A_X  = (nbr_cp[CellParams::PERBX_DT2] + nbr_cp[CellParams::BGBX]) - (cp[CellParams::PERBX_DT2] + cp[CellParams::BGBX]);
-      rhom = cp[CellParams::RHO_DT2] + ydir*HALF*derivs[fs::drhody] + zdir*HALF*derivs[fs::drhodz];
+      rhom = cp[CellParams::RHOM_DT2] + ydir*HALF*derivs[fs::drhomdy] + zdir*HALF*derivs[fs::drhomdz];
       p11 = cp[CellParams::P_11_DT2] + ydir*HALF*derivs[fs::dp11dy] + zdir*HALF*derivs[fs::dp11dz];
       p22 = cp[CellParams::P_22_DT2] + ydir*HALF*derivs[fs::dp22dy] + zdir*HALF*derivs[fs::dp22dz];
       p33 = cp[CellParams::P_33_DT2] + ydir*HALF*derivs[fs::dp33dy] + zdir*HALF*derivs[fs::dp33dz];
    }
-   if (rhom < minRho) {
-      rhom = minRho;
-   } else if (rhom > maxRho) {
-      rhom = maxRho;
+   if (rhom < minRhom) {
+      rhom = minRhom;
+   } else if (rhom > maxRhom) {
+      rhom = maxRhom;
    }
-   rhom *= pc::MASS_PROTON;
    
    const Real A_Y  = nbr_derivs[fs::dPERBxdy] + nbr_derivs[fs::dBGBxdy] + derivs[fs::dPERBxdy] + derivs[fs::dBGBxdy];
    const Real A_XY = nbr_derivs[fs::dPERBxdy] + nbr_derivs[fs::dBGBxdy] - (derivs[fs::dPERBxdy] + derivs[fs::dBGBxdy]);
@@ -111,17 +147,21 @@ Real calculateWaveSpeedYZ(
      + TWELWTH*(A_X + ydir*HALF*A_XY + zdir*HALF*A_XZ)*(A_X + ydir*HALF*A_XY + zdir*HALF*A_XZ); // OK
    const Real By2  = (By + zdir*HALF*dBydz)*(By + zdir*HALF*dBydz) + TWELWTH*dBydx*dBydx; // OK
    const Real Bz2  = (Bz + ydir*HALF*dBzdy)*(Bz + ydir*HALF*dBzdy) + TWELWTH*dBzdx*dBzdx; // OK
-
+   
+   const Real Bmag2 = Bx2 + By2 + Bz2;
+   
    p11 = p11 < 0.0 ? 0.0 : p11;
    p22 = p22 < 0.0 ? 0.0 : p22;
    p33 = p33 < 0.0 ? 0.0 : p33;
 
-   const Real vA2 = divideIfNonZero(Bx2+By2+Bz2, pc::MU_0*rhom); // Alfven speed
+   const Real vA2 = divideIfNonZero(Bmag2, pc::MU_0*rhom); // Alfven speed
    const Real vS2 = divideIfNonZero(p11+p22+p33, 2.0*rhom); // sound speed, adiabatic coefficient 3/2, P=1/3*trace in sound speed
-   const Real vW = Parameters::ohmHallTerm > 0 ? divideIfNonZero(2.0*M_PI*vA2*pc::MASS_PROTON, 
-                                                                 cp[CellParams::DX]*pc::CHARGE*sqrt(Bx2+By2+Bz2)) : 0.0; // whistler speed
-
-   return min(Parameters::maxWaveVelocity,sqrt(vA2 + vS2) + vW);
+#warning Which ion species to take into whistler speed?
+   const Real vW = Parameters::ohmHallTerm > 0 ? divideIfNonZero(2.0*M_PI*vA2*pc::MASS_PROTON, cp[CellParams::DX]*pc::CHARGE*sqrt(Bmag2)) : 0.0; // whistler speed
+   
+   ret_vA = sqrt(vA2);
+   ret_vS = sqrt(vS2);
+   ret_vW = vW;
 }
 
 /*! \brief Low-level helper function.
@@ -144,11 +184,14 @@ Real calculateWaveSpeedYZ(
  * \param dBzdy dBzdy derivative
  * \param xdir +1 or -1 depending on the interpolation direction in x
  * \param zdir +1 or -1 depending on the interpolation direction in z
- * \param minRho Minimum density allowed from the neighborhood
- * \param maxRho Maximum density allowed from the neighborhood
+ * \param minRhom Minimum mass density allowed from the neighborhood
+ * \param maxRhom Maximum mass density allowed from the neighborhood
  * \param RKCase Element in the enum defining the Runge-Kutta method steps
+ * \param ret_vA Alfven speed returned
+ * \param ret_vS Sound speed returned
+ * \param ret_vW Whistler speed returned
  */
-Real calculateWaveSpeedXZ(
+void calculateWaveSpeedXZ(
    const Real* cp,
    const Real* derivs,
    const Real* nbr_cp,
@@ -161,34 +204,38 @@ Real calculateWaveSpeedXZ(
    const Real& dBzdy,
    const Real& xdir,
    const Real& zdir,
-   const Real& minRho,
-   const Real& maxRho,
-   cint& RKCase
+   const Real& minRhom,
+   const Real& maxRhom,
+   cint& RKCase,
+   Real& ret_vA,
+   Real& ret_vS,
+   Real& ret_vW
 ) {
-   if (Parameters::propagateField == false) return 0.0;
+   if (Parameters::propagateField == false) {
+      return;
+   }
 
    Real B_0, B_Y, rhom, p11, p22, p33;
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
       B_0  = HALF*(nbr_cp[CellParams::PERBY] + nbr_cp[CellParams::BGBY] + cp[CellParams::PERBY] + cp[CellParams::BGBY]);
       B_Y  = (nbr_cp[CellParams::PERBY] + nbr_cp[CellParams::BGBY]) - (cp[CellParams::PERBY] + cp[CellParams::BGBY]);
-      rhom = cp[CellParams::RHO] + xdir*HALF*derivs[fs::drhodx] + zdir*HALF*derivs[fs::drhodz];
+      rhom = cp[CellParams::RHOM] + xdir*HALF*derivs[fs::drhomdx] + zdir*HALF*derivs[fs::drhomdz];
       p11 = cp[CellParams::P_11] + xdir*HALF*derivs[fs::dp11dx] + zdir*HALF*derivs[fs::dp11dz];
       p22 = cp[CellParams::P_22] + xdir*HALF*derivs[fs::dp22dx] + zdir*HALF*derivs[fs::dp22dz];
       p33 = cp[CellParams::P_33] + xdir*HALF*derivs[fs::dp33dx] + zdir*HALF*derivs[fs::dp33dz];
    } else { // RKCase == RK_ORDER2_STEP1
       B_0  = HALF*(nbr_cp[CellParams::PERBY_DT2] + nbr_cp[CellParams::BGBY] + cp[CellParams::PERBY_DT2] + cp[CellParams::BGBY]);
       B_Y  = (nbr_cp[CellParams::PERBY_DT2] + nbr_cp[CellParams::BGBY]) - (cp[CellParams::PERBY_DT2] + cp[CellParams::BGBY]);
-      rhom = cp[CellParams::RHO_DT2] + xdir*HALF*derivs[fs::drhodx] + zdir*HALF*derivs[fs::drhodz];
+      rhom = cp[CellParams::RHOM_DT2] + xdir*HALF*derivs[fs::drhomdx] + zdir*HALF*derivs[fs::drhomdz];
       p11 = cp[CellParams::P_11_DT2] + xdir*HALF*derivs[fs::dp11dx] + zdir*HALF*derivs[fs::dp11dz];
       p22 = cp[CellParams::P_22_DT2] + xdir*HALF*derivs[fs::dp22dx] + zdir*HALF*derivs[fs::dp22dz];
       p33 = cp[CellParams::P_33_DT2] + xdir*HALF*derivs[fs::dp33dx] + zdir*HALF*derivs[fs::dp33dz];
    }
-   if (rhom < minRho) {
-      rhom = minRho;
-   } else if (rhom > maxRho) {
-      rhom = maxRho;
+   if (rhom < minRhom) {
+      rhom = minRhom;
+   } else if (rhom > maxRhom) {
+      rhom = maxRhom;
    }
-   rhom *= pc::MASS_PROTON;
    
    const Real B_X  = nbr_derivs[fs::dPERBydx] + nbr_derivs[fs::dBGBydx] + derivs[fs::dPERBydx] + derivs[fs::dBGBydx];
    const Real B_XY = nbr_derivs[fs::dPERBydx] + nbr_derivs[fs::dBGBydx] - (derivs[fs::dPERBydx] + derivs[fs::dBGBydx]);
@@ -200,15 +247,20 @@ Real calculateWaveSpeedXZ(
    const Real Bx2  = (Bx + zdir*HALF*dBxdz)*(Bx + zdir*HALF*dBxdz) + TWELWTH*dBxdy*dBxdy; // OK
    const Real Bz2  = (Bz + xdir*HALF*dBzdx)*(Bz + xdir*HALF*dBzdx) + TWELWTH*dBzdy*dBzdy; // OK
    
+   const Real Bmag2 = Bx2 + By2 + Bz2;
+   
    p11 = p11 < 0.0 ? 0.0 : p11;
    p22 = p22 < 0.0 ? 0.0 : p22;
    p33 = p33 < 0.0 ? 0.0 : p33;
    
-   const Real vA2 = divideIfNonZero(Bx2+By2+Bz2, pc::MU_0*rhom); // Alfven speed
+   const Real vA2 = divideIfNonZero(Bmag2, pc::MU_0*rhom); // Alfven speed
    const Real vS2 = divideIfNonZero(p11+p22+p33, 2.0*rhom); // sound speed, adiabatic coefficient 3/2, P=1/3*trace in sound speed
-   const Real vW = Parameters::ohmHallTerm > 0 ? divideIfNonZero(2.0*M_PI*vA2*pc::MASS_PROTON, cp[CellParams::DX]*pc::CHARGE*sqrt(Bx2+By2+Bz2)) : 0.0; // whistler speed
-      
-   return min(Parameters::maxWaveVelocity,sqrt(vA2 + vS2) + vW);
+#warning Which ion species to take into whistler speed?
+   const Real vW = Parameters::ohmHallTerm > 0 ? divideIfNonZero(2.0*M_PI*vA2*pc::MASS_PROTON, cp[CellParams::DX]*pc::CHARGE*sqrt(Bmag2)) : 0.0; // whistler speed
+   
+   ret_vA = sqrt(vA2);
+   ret_vS = sqrt(vS2);
+   ret_vW = vW;
 }
 
 /*! \brief Low-level helper function.
@@ -231,11 +283,14 @@ Real calculateWaveSpeedXZ(
  * \param dBydz dBydz derivative
  * \param xdir +1 or -1 depending on the interpolation direction in x
  * \param ydir +1 or -1 depending on the interpolation direction in y
- * \param minRho Minimum density allowed from the neighborhood
- * \param maxRho Maximum density allowed from the neighborhood
+ * \param minRhom Minimum mass density allowed from the neighborhood
+ * \param maxRhom Maximum mass density allowed from the neighborhood
  * \param RKCase Element in the enum defining the Runge-Kutta method steps
+ * \param ret_vA Alfven speed returned
+ * \param ret_vS Sound speed returned
+ * \param ret_vW Whistler speed returned
  */
-Real calculateWaveSpeedXY(
+void calculateWaveSpeedXY(
    const Real* cp,
    const Real* derivs,
    const Real* nbr_cp,
@@ -248,34 +303,38 @@ Real calculateWaveSpeedXY(
    const Real& dBydz,
    const Real& xdir,
    const Real& ydir,
-   const Real& minRho,
-   const Real& maxRho,
-   cint& RKCase
+   const Real& minRhom,
+   const Real& maxRhom,
+   cint& RKCase,
+   Real& ret_vA,
+   Real& ret_vS,
+   Real& ret_vW
 ) {
-   if (Parameters::propagateField == false) return 0.0;
+   if (Parameters::propagateField == false) {
+      return;
+   }
 
    Real C_0, C_Z, rhom, p11, p22, p33;
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
       C_0  = HALF*(nbr_cp[CellParams::PERBZ] + nbr_cp[CellParams::BGBZ] + cp[CellParams::PERBZ] + cp[CellParams::BGBZ]);
       C_Z  = (nbr_cp[CellParams::PERBZ] + nbr_cp[CellParams::BGBZ]) - (cp[CellParams::PERBZ] + cp[CellParams::BGBZ]);
-      rhom = cp[CellParams::RHO] + xdir*HALF*derivs[fs::drhodx] + ydir*HALF*derivs[fs::drhody];
+      rhom = cp[CellParams::RHOM] + xdir*HALF*derivs[fs::drhomdx] + ydir*HALF*derivs[fs::drhomdy];
       p11 = cp[CellParams::P_11] + xdir*HALF*derivs[fs::dp11dx] + ydir*HALF*derivs[fs::dp11dy];
       p22 = cp[CellParams::P_22] + xdir*HALF*derivs[fs::dp22dx] + ydir*HALF*derivs[fs::dp22dy];
       p33 = cp[CellParams::P_33] + xdir*HALF*derivs[fs::dp33dx] + ydir*HALF*derivs[fs::dp33dy];
    } else { // RKCase == RK_ORDER2_STEP1
       C_0  = HALF*(nbr_cp[CellParams::PERBZ_DT2] + nbr_cp[CellParams::BGBZ] + cp[CellParams::PERBZ_DT2] + cp[CellParams::BGBZ]);
       C_Z  = (nbr_cp[CellParams::PERBZ_DT2] + nbr_cp[CellParams::BGBZ]) - (cp[CellParams::PERBZ_DT2] + cp[CellParams::BGBZ]);
-      rhom = cp[CellParams::RHO_DT2] + xdir*HALF*derivs[fs::drhodx] + ydir*HALF*derivs[fs::drhody];
+      rhom = cp[CellParams::RHOM_DT2] + xdir*HALF*derivs[fs::drhomdx] + ydir*HALF*derivs[fs::drhomdy];
       p11 = cp[CellParams::P_11_DT2] + xdir*HALF*derivs[fs::dp11dx] + ydir*HALF*derivs[fs::dp11dy];
       p22 = cp[CellParams::P_22_DT2] + xdir*HALF*derivs[fs::dp22dx] + ydir*HALF*derivs[fs::dp22dy];
       p33 = cp[CellParams::P_33_DT2] + xdir*HALF*derivs[fs::dp33dx] + ydir*HALF*derivs[fs::dp33dy];
    }
-   if (rhom < minRho) {
-      rhom = minRho;
-   } else if (rhom > maxRho) {
-      rhom = maxRho;
+   if (rhom < minRhom) {
+      rhom = minRhom;
+   } else if (rhom > maxRhom) {
+      rhom = maxRhom;
    }
-   rhom *= pc::MASS_PROTON;
    
    const Real C_X  = nbr_derivs[fs::dPERBzdx] + nbr_derivs[fs::dBGBzdx] + derivs[fs::dPERBzdx] + derivs[fs::dBGBzdx];
    const Real C_XZ = nbr_derivs[fs::dPERBzdx] + nbr_derivs[fs::dBGBzdx] - (derivs[fs::dPERBzdx] + derivs[fs::dBGBzdx]);
@@ -287,15 +346,20 @@ Real calculateWaveSpeedXY(
    const Real Bx2  = (Bx + ydir*HALF*dBxdy)*(Bx + ydir*HALF*dBxdy) + TWELWTH*dBxdz*dBxdz;
    const Real By2  = (By + xdir*HALF*dBydx)*(By + xdir*HALF*dBydx) + TWELWTH*dBydz*dBydz;
    
+   const Real Bmag2 = Bx2 + By2 + Bz2;
+   
    p11 = p11 < 0.0 ? 0.0 : p11;
    p22 = p22 < 0.0 ? 0.0 : p22;
    p33 = p33 < 0.0 ? 0.0 : p33;
       
-   const Real vA2 = divideIfNonZero(Bx2+By2+Bz2, pc::MU_0*rhom); // Alfven speed
+   const Real vA2 = divideIfNonZero(Bmag2, pc::MU_0*rhom); // Alfven speed
    const Real vS2 = divideIfNonZero(p11+p22+p33, 2.0*rhom); // sound speed, adiabatic coefficient 3/2, P=1/3*trace in sound speed
-   const Real vW = Parameters::ohmHallTerm > 0 ? divideIfNonZero(2.0*M_PI*vA2*pc::MASS_PROTON, cp[CellParams::DX]*pc::CHARGE*sqrt(Bx2+By2+Bz2)) : 0.0; // whistler speed
-
-   return min(Parameters::maxWaveVelocity,sqrt(vA2 + vS2) + vW);
+#warning Which ion species to take into whistler speed?
+   const Real vW = Parameters::ohmHallTerm > 0 ? divideIfNonZero(2.0*M_PI*vA2*pc::MASS_PROTON, cp[CellParams::DX]*pc::CHARGE*sqrt(Bmag2)) : 0.0; // whistler speed
+   
+   ret_vA = sqrt(vA2);
+   ret_vS = sqrt(vS2);
+   ret_vW = vW;
 }
 
 /*! \brief Low-level electric field propagation function.
@@ -330,6 +394,8 @@ void calculateEdgeElectricFieldX(
    Real ay_pos,ay_neg;              // Max. characteristic velocities to y-direction
    Real az_pos,az_neg;              // Max. characteristic velocities to z-direction
    Real Vy0,Vz0;                    // Reconstructed V
+   Real vA, vS, vW;                 // Alfven, sound, whistler speed
+   Real maxV = 0.0;                 // Max velocity for CFL purposes
    Real c_y, c_z;                   // Wave speeds to yz-directions
 
    // Get read-only pointers to NE,NW,SE,SW states (SW is rw, result is written there):
@@ -342,9 +408,9 @@ void calculateEdgeElectricFieldX(
    creal* const derivs_NE = cache.cells[fs_cache::calculateNbrID(1  ,1-1,1-1)]->derivatives;
    creal* const derivs_NW = cache.cells[fs_cache::calculateNbrID(1  ,1  ,1-1)]->derivatives;
 
-   Real By_S, Bz_W, Bz_E, By_N, perBy_S, perBz_W, perBz_E, perBy_N;
-   Real minRho = std::numeric_limits<Real>::max();
-   Real maxRho = std::numeric_limits<Real>::min();
+   Real By_S, Bz_W, Bz_E, By_N, perBy_S, perBz_W, perBz_E, perBy_N, rhoq_S;
+   Real minRhom = std::numeric_limits<Real>::max();
+   Real maxRhom = std::numeric_limits<Real>::min();
    if(RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
       By_S = cp_SW[CellParams::PERBY]+cp_SW[CellParams::BGBY];
       Bz_W = cp_SW[CellParams::PERBZ]+cp_SW[CellParams::BGBZ];
@@ -354,21 +420,22 @@ void calculateEdgeElectricFieldX(
       perBz_W = cp_SW[CellParams::PERBZ];
       perBz_E = cp_SE[CellParams::PERBZ];
       perBy_N = cp_NW[CellParams::PERBY];
-      Vy0  = divideIfNonZero(cp_SW[CellParams::RHOVY], cp_SW[CellParams::RHO]);
-      Vz0  = divideIfNonZero(cp_SW[CellParams::RHOVZ], cp_SW[CellParams::RHO]);
-      minRho = min(minRho,
-                  min(cp_SW[CellParams::RHO],
-                     min(cp_SE[CellParams::RHO],
-                        min(cp_NW[CellParams::RHO],
-                            cp_NE[CellParams::RHO])
+      Vy0  = divideIfNonZero(cp_SW[CellParams::RHOMVY], cp_SW[CellParams::RHOM]);
+      Vz0  = divideIfNonZero(cp_SW[CellParams::RHOMVZ], cp_SW[CellParams::RHOM]);
+      rhoq_S = FOURTH*(cp_SW[CellParams::RHOQ] + cp_SE[CellParams::RHOQ] + cp_NW[CellParams::RHOQ] + cp_NE[CellParams::RHOQ]);
+      minRhom = min(minRhom,
+                  min(cp_SW[CellParams::RHOM],
+                     min(cp_SE[CellParams::RHOM],
+                        min(cp_NW[CellParams::RHOM],
+                            cp_NE[CellParams::RHOM])
                         )
                      )
                   );
-      maxRho = max(maxRho,
-                  max(cp_SW[CellParams::RHO],
-                     max(cp_SE[CellParams::RHO],
-                        max(cp_NW[CellParams::RHO],
-                            cp_NE[CellParams::RHO])
+      maxRhom = max(maxRhom,
+                  max(cp_SW[CellParams::RHOM],
+                     max(cp_SE[CellParams::RHOM],
+                        max(cp_NW[CellParams::RHOM],
+                            cp_NE[CellParams::RHOM])
                         )
                      )
                   );
@@ -381,26 +448,28 @@ void calculateEdgeElectricFieldX(
       perBz_W = cp_SW[CellParams::PERBZ_DT2];
       perBz_E = cp_SE[CellParams::PERBZ_DT2];
       perBy_N = cp_NW[CellParams::PERBY_DT2];
-      Vy0  = divideIfNonZero(cp_SW[CellParams::RHOVY_DT2], cp_SW[CellParams::RHO_DT2]);
-      Vz0  = divideIfNonZero(cp_SW[CellParams::RHOVZ_DT2], cp_SW[CellParams::RHO_DT2]);
-      minRho = min(minRho,
-                  min(cp_SW[CellParams::RHO_DT2],
-                     min(cp_SE[CellParams::RHO_DT2],
-                        min(cp_NW[CellParams::RHO_DT2],
-                            cp_NE[CellParams::RHO_DT2])
+      Vy0  = divideIfNonZero(cp_SW[CellParams::RHOMVY_DT2], cp_SW[CellParams::RHOM_DT2]);
+      Vz0  = divideIfNonZero(cp_SW[CellParams::RHOMVZ_DT2], cp_SW[CellParams::RHOM_DT2]);
+      rhoq_S = FOURTH*(cp_SW[CellParams::RHOQ_DT2] + cp_SE[CellParams::RHOQ_DT2] + cp_NW[CellParams::RHOQ_DT2] + cp_NE[CellParams::RHOQ_DT2]);
+      minRhom = min(minRhom,
+                  min(cp_SW[CellParams::RHOM_DT2],
+                     min(cp_SE[CellParams::RHOM_DT2],
+                        min(cp_NW[CellParams::RHOM_DT2],
+                            cp_NE[CellParams::RHOM_DT2])
                         )
                      )
                   );
-      maxRho = max(maxRho,
-                  max(cp_SW[CellParams::RHO_DT2],
-                     max(cp_SE[CellParams::RHO_DT2],
-                        max(cp_NW[CellParams::RHO_DT2],
-                            cp_NE[CellParams::RHO_DT2])
+      maxRhom = max(maxRhom,
+                  max(cp_SW[CellParams::RHOM_DT2],
+                     max(cp_SE[CellParams::RHOM_DT2],
+                        max(cp_NW[CellParams::RHOM_DT2],
+                            cp_NE[CellParams::RHOM_DT2])
                         )
                      )
                   );
    }
-
+   rhoq_S = (rhoq_S <= Parameters::hallMinimumRhoq) ? Parameters::hallMinimumRhoq : rhoq_S ;
+   
    creal dBydx_S = derivs_SW[fs::dPERBydx] + derivs_SW[fs::dBGBydx];
    creal dBydz_S = derivs_SW[fs::dPERBydz] + derivs_SW[fs::dBGBydz];
    creal dBzdx_W = derivs_SW[fs::dPERBzdx] + derivs_SW[fs::dBGBzdx];
@@ -428,13 +497,13 @@ void calculateEdgeElectricFieldX(
           (cp_SW[CellParams::BGBZ]+cp_SW[CellParams::PERBZ])*
           (cp_SW[CellParams::BGBZ]+cp_SW[CellParams::PERBZ])
          ) /
-     (cp_SW[CellParams::RHO]*physicalconstants::CHARGE) /
+     cp_SW[CellParams::RHOQ] /
      physicalconstants::MU_0 *
      (derivs_SW[fs::dPERBzdy]/cp_SW[CellParams::DY] - derivs_SW[fs::dPERBydz]/cp_SW[CellParams::DZ]);
    
    // Hall term
    if(Parameters::ohmHallTerm > 0) {
-      Ex_SW += cp_SW[CellParams::EXHALL_000_100];
+      Ex_SW += cp_SW[CellParams::EXHALL_000_100] / (rhoq_S*physicalconstants::MU_0);
    }
    
    // Electron pressure gradient term
@@ -450,21 +519,23 @@ void calculateEdgeElectricFieldX(
 
    creal* const nbr_cp_SW     = cache.cells[fs_cache::calculateNbrID(1+1,1  ,1  )]->parameters;
    creal* const nbr_derivs_SW = cache.cells[fs_cache::calculateNbrID(1+1,1  ,1  )]->derivatives;
-
-   c_y = calculateWaveSpeedYZ(cp_SW, derivs_SW, nbr_cp_SW, nbr_derivs_SW, By_S, Bz_W, dBydx_S, dBydz_S, dBzdx_W, dBzdy_W, MINUS, MINUS, minRho, maxRho, RKCase);
+   
+   calculateWaveSpeedYZ(cp_SW, derivs_SW, nbr_cp_SW, nbr_derivs_SW, By_S, Bz_W, dBydx_S, dBydz_S, dBzdx_W, dBzdy_W, MINUS, MINUS, minRhom, maxRhom, RKCase, vA, vS, vW);
+   c_y = min(Parameters::maxWaveVelocity,sqrt(vA*vA + vS*vS));
    c_z = c_y;
    ay_neg   = max(ZERO,-Vy0 + c_y);
    ay_pos   = max(ZERO,+Vy0 + c_y);
    az_neg   = max(ZERO,-Vz0 + c_z);
    az_pos   = max(ZERO,+Vz0 + c_z);
+   maxV = max(maxV, calculateCflSpeed(Vy0, Vz0, vA, vS, vW));
 
    // Ex and characteristic speeds on j-1 neighbour:
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
-      Vy0  = divideIfNonZero(cp_SE[CellParams::RHOVY], cp_SE[CellParams::RHO]);
-      Vz0  = divideIfNonZero(cp_SE[CellParams::RHOVZ], cp_SE[CellParams::RHO]);
+      Vy0  = divideIfNonZero(cp_SE[CellParams::RHOMVY], cp_SE[CellParams::RHOM]);
+      Vz0  = divideIfNonZero(cp_SE[CellParams::RHOMVZ], cp_SE[CellParams::RHOM]);
    } else { // RKCase == RK_ORDER2_STEP1
-      Vy0  = divideIfNonZero(cp_SE[CellParams::RHOVY_DT2], cp_SE[CellParams::RHO_DT2]);
-      Vz0  = divideIfNonZero(cp_SE[CellParams::RHOVZ_DT2], cp_SE[CellParams::RHO_DT2]);
+      Vy0  = divideIfNonZero(cp_SE[CellParams::RHOMVY_DT2], cp_SE[CellParams::RHOM_DT2]);
+      Vz0  = divideIfNonZero(cp_SE[CellParams::RHOMVZ_DT2], cp_SE[CellParams::RHOM_DT2]);
    }
 
    // 1st order terms:
@@ -480,13 +551,13 @@ void calculateEdgeElectricFieldX(
           (cp_SE[CellParams::BGBZ]+cp_SE[CellParams::PERBZ])*
           (cp_SE[CellParams::BGBZ]+cp_SE[CellParams::PERBZ])
          ) /
-     (cp_SE[CellParams::RHO]*physicalconstants::CHARGE) /
+     cp_SE[CellParams::RHOQ] /
      physicalconstants::MU_0 *
      (derivs_SE[fs::dPERBzdy]/cp_SE[CellParams::DY] - derivs_SE[fs::dPERBydz]/cp_SE[CellParams::DZ]);
 
    // Hall term
    if(Parameters::ohmHallTerm > 0) {
-      Ex_SE += cp_SE[CellParams::EXHALL_010_110];
+      Ex_SE += cp_SE[CellParams::EXHALL_010_110] / (rhoq_S*physicalconstants::MU_0);
    }
    
    // Electron pressure gradient term
@@ -502,21 +573,23 @@ void calculateEdgeElectricFieldX(
 
    creal* const nbr_cp_SE     = cache.cells[fs_cache::calculateNbrID(1+1,1-1,1  )]->parameters;
    creal* const nbr_derivs_SE = cache.cells[fs_cache::calculateNbrID(1+1,1-1,1  )]->derivatives;
-
-   c_y = calculateWaveSpeedYZ(cp_SE, derivs_SE, nbr_cp_SE, nbr_derivs_SE, By_S, Bz_E, dBydx_S, dBydz_S, dBzdx_E, dBzdy_E, PLUS, MINUS, minRho, maxRho, RKCase);
+   
+   calculateWaveSpeedYZ(cp_SE, derivs_SE, nbr_cp_SE, nbr_derivs_SE, By_S, Bz_E, dBydx_S, dBydz_S, dBzdx_E, dBzdy_E, PLUS, MINUS, minRhom, maxRhom, RKCase, vA, vS, vW);
+   c_y = min(Parameters::maxWaveVelocity,sqrt(vA*vA + vS*vS));
    c_z = c_y;
    ay_neg   = max(ay_neg,-Vy0 + c_y);
    ay_pos   = max(ay_pos,+Vy0 + c_y);
    az_neg   = max(az_neg,-Vz0 + c_z);
    az_pos   = max(az_pos,+Vz0 + c_z);
+   maxV = max(maxV, calculateCflSpeed(Vy0, Vz0, vA, vS, vW));
 
    // Ex and characteristic speeds on k-1 neighbour:
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
-      Vy0  = divideIfNonZero(cp_NW[CellParams::RHOVY], cp_NW[CellParams::RHO]);
-      Vz0  = divideIfNonZero(cp_NW[CellParams::RHOVZ], cp_NW[CellParams::RHO]);
+      Vy0  = divideIfNonZero(cp_NW[CellParams::RHOMVY], cp_NW[CellParams::RHOM]);
+      Vz0  = divideIfNonZero(cp_NW[CellParams::RHOMVZ], cp_NW[CellParams::RHOM]);
    } else { // RKCase == RK_ORDER2_STEP1
-      Vy0  = divideIfNonZero(cp_NW[CellParams::RHOVY_DT2], cp_NW[CellParams::RHO_DT2]);
-      Vz0  = divideIfNonZero(cp_NW[CellParams::RHOVZ_DT2], cp_NW[CellParams::RHO_DT2]);
+      Vy0  = divideIfNonZero(cp_NW[CellParams::RHOMVY_DT2], cp_NW[CellParams::RHOM_DT2]);
+      Vz0  = divideIfNonZero(cp_NW[CellParams::RHOMVZ_DT2], cp_NW[CellParams::RHOM_DT2]);
    }
 
    // 1st order terms:
@@ -532,13 +605,13 @@ void calculateEdgeElectricFieldX(
           (cp_NW[CellParams::BGBZ]+cp_NW[CellParams::PERBZ])*
           (cp_NW[CellParams::BGBZ]+cp_NW[CellParams::PERBZ])
          ) /
-     (cp_NW[CellParams::RHO]*physicalconstants::CHARGE) /
+     cp_NW[CellParams::RHOQ] /
      physicalconstants::MU_0 *
      (derivs_NW[fs::dPERBzdy]/cp_NW[CellParams::DY] - derivs_NW[fs::dPERBydz]/cp_NW[CellParams::DZ]);
    
    // Hall term
    if(Parameters::ohmHallTerm > 0) {
-      Ex_NW += cp_NW[CellParams::EXHALL_001_101];
+      Ex_NW += cp_NW[CellParams::EXHALL_001_101]  / (rhoq_S*physicalconstants::MU_0);
    }
    
    // Electron pressure gradient term
@@ -554,21 +627,23 @@ void calculateEdgeElectricFieldX(
    
    creal* const nbr_cp_NW     = cache.cells[fs_cache::calculateNbrID(1+1,1  ,1-1)]->parameters;
    creal* const nbr_derivs_NW = cache.cells[fs_cache::calculateNbrID(1+1,1  ,1-1)]->derivatives;
-
-   c_y = calculateWaveSpeedYZ(cp_NW, derivs_NW, nbr_cp_NW, nbr_derivs_NW, By_N, Bz_W, dBydx_N, dBydz_N, dBzdx_W, dBzdy_W, MINUS, PLUS, minRho, maxRho, RKCase);
+   
+   calculateWaveSpeedYZ(cp_NW, derivs_NW, nbr_cp_NW, nbr_derivs_NW, By_N, Bz_W, dBydx_N, dBydz_N, dBzdx_W, dBzdy_W, MINUS, PLUS, minRhom, maxRhom, RKCase, vA, vS, vW);
+   c_y = min(Parameters::maxWaveVelocity,sqrt(vA*vA + vS*vS));
    c_z = c_y;
    ay_neg   = max(ay_neg,-Vy0 + c_y);
    ay_pos   = max(ay_pos,+Vy0 + c_y);
    az_neg   = max(az_neg,-Vz0 + c_z);
    az_pos   = max(az_pos,+Vz0 + c_z);
+   maxV = max(maxV, calculateCflSpeed(Vy0, Vz0, vA, vS, vW));
 
    // Ex and characteristic speeds on j-1,k-1 neighbour:
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
-      Vy0 = divideIfNonZero(cp_NE[CellParams::RHOVY], cp_NE[CellParams::RHO]);
-      Vz0 = divideIfNonZero(cp_NE[CellParams::RHOVZ], cp_NE[CellParams::RHO]);
+      Vy0 = divideIfNonZero(cp_NE[CellParams::RHOMVY], cp_NE[CellParams::RHOM]);
+      Vz0 = divideIfNonZero(cp_NE[CellParams::RHOMVZ], cp_NE[CellParams::RHOM]);
    } else { // RKCase == RK_ORDER2_STEP1
-      Vy0 = divideIfNonZero(cp_NE[CellParams::RHOVY_DT2], cp_NE[CellParams::RHO_DT2]);
-      Vz0 = divideIfNonZero(cp_NE[CellParams::RHOVZ_DT2], cp_NE[CellParams::RHO_DT2]);
+      Vy0 = divideIfNonZero(cp_NE[CellParams::RHOMVY_DT2], cp_NE[CellParams::RHOM_DT2]);
+      Vz0 = divideIfNonZero(cp_NE[CellParams::RHOMVZ_DT2], cp_NE[CellParams::RHOM_DT2]);
    }
    
    // 1st order terms:
@@ -584,13 +659,13 @@ void calculateEdgeElectricFieldX(
                  (cp_NE[CellParams::BGBZ]+cp_NE[CellParams::PERBZ])*
                  (cp_NE[CellParams::BGBZ]+cp_NE[CellParams::PERBZ])
                 ) /
-               (cp_NE[CellParams::RHO]*physicalconstants::CHARGE) /
+               cp_NE[CellParams::RHOQ] /
             physicalconstants::MU_0 *
             (derivs_NE[fs::dPERBzdy]/cp_NE[CellParams::DY] - derivs_NE[fs::dPERBydz]/cp_NE[CellParams::DZ]);
 
    // Hall term
    if(Parameters::ohmHallTerm > 0) {
-      Ex_NE += cp_NE[CellParams::EXHALL_011_111];
+      Ex_NE += cp_NE[CellParams::EXHALL_011_111] / (rhoq_S*physicalconstants::MU_0);
    }
    
    // Electron pressure gradient term
@@ -606,13 +681,15 @@ void calculateEdgeElectricFieldX(
    
    creal* const nbr_cp_NE     = cache.cells[fs_cache::calculateNbrID(1+1,1-1,1-1)]->parameters;
    creal* const nbr_derivs_NE = cache.cells[fs_cache::calculateNbrID(1+1,1-1,1-1)]->derivatives;
-
-   c_y = calculateWaveSpeedYZ(cp_NE, derivs_NE, nbr_cp_NE, nbr_derivs_NE, By_N, Bz_E, dBydx_N, dBydz_N, dBzdx_E, dBzdy_E, PLUS, PLUS, minRho, maxRho, RKCase);
+   
+   calculateWaveSpeedYZ(cp_NE, derivs_NE, nbr_cp_NE, nbr_derivs_NE, By_N, Bz_E, dBydx_N, dBydz_N, dBzdx_E, dBzdy_E, PLUS, PLUS, minRhom, maxRhom, RKCase, vA, vS, vW);
+   c_y = min(Parameters::maxWaveVelocity,sqrt(vA*vA + vS*vS));
    c_z = c_y;
    ay_neg   = max(ay_neg,-Vy0 + c_y);
    ay_pos   = max(ay_pos,+Vy0 + c_y);
    az_neg   = max(az_neg,-Vz0 + c_z);
    az_pos   = max(az_pos,+Vz0 + c_z);
+   maxV = max(maxV, calculateCflSpeed(Vy0, Vz0, vA, vS, vW));
 
    // Calculate properly upwinded edge-averaged Ex:
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
@@ -647,16 +724,11 @@ void calculateEdgeElectricFieldX(
    
    if ((RKCase == RK_ORDER1) || (RKCase == RK_ORDER2_STEP2)) {
       //compute maximum timestep for fieldsolver in this cell (CFL=1)
-      Real max_a=ZERO;
-      max_a=max(fabs(az_neg),max_a); 
-      max_a=max(fabs(az_pos),max_a);
-      max_a=max(fabs(ay_neg),max_a);
-      max_a=max(fabs(ay_pos),max_a);
       Real min_dx=std::numeric_limits<Real>::max();
       min_dx=min(min_dx,cp_SW[CellParams::DY]);
       min_dx=min(min_dx,cp_SW[CellParams::DZ]);
       //update max allowed timestep for field propagation in this cell, which is the minimum of CFL=1 timesteps
-      if (max_a != ZERO) cp_SW[CellParams::MAXFDT] = min(cp_SW[CellParams::MAXFDT],min_dx/max_a);
+      if (maxV != ZERO) cp_SW[CellParams::MAXFDT] = min(cp_SW[CellParams::MAXFDT],min_dx/maxV);
    }
 }
 
@@ -692,6 +764,8 @@ void calculateEdgeElectricFieldY(
    Real ax_pos,ax_neg;              // Max. characteristic velocities to x-direction
    Real az_pos,az_neg;              // Max. characteristic velocities to z-direction
    Real Vx0,Vz0;                    // Reconstructed V
+   Real vA, vS, vW;                 // Alfven, sound, whistler speed
+   Real maxV = 0.0;                 // Max velocity for CFL purposes
    Real c_x,c_z;                    // Wave speeds to xz-directions
 
    // Get read-only pointers to NE,NW,SE,SW states (SW is rw, result is written there):
@@ -705,9 +779,9 @@ void calculateEdgeElectricFieldY(
    creal* const derivs_NE = cache.cells[fs_cache::calculateNbrID(1-1,1  ,1-1)]->derivatives;
 
    // Fetch required plasma parameters:
-   Real Bz_S, Bx_W, Bx_E, Bz_N, perBz_S, perBx_W, perBx_E, perBz_N;
-   Real minRho = std::numeric_limits<Real>::max();
-   Real maxRho = std::numeric_limits<Real>::min();
+   Real Bz_S, Bx_W, Bx_E, Bz_N, perBz_S, perBx_W, perBx_E, perBz_N, rhoq_S;
+   Real minRhom = std::numeric_limits<Real>::max();
+   Real maxRhom = std::numeric_limits<Real>::min();
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
       Bz_S = cp_SW[CellParams::PERBZ]+cp_SW[CellParams::BGBZ];
       Bx_W = cp_SW[CellParams::PERBX]+cp_SW[CellParams::BGBX];
@@ -717,21 +791,22 @@ void calculateEdgeElectricFieldY(
       perBx_W = cp_SW[CellParams::PERBX];
       perBx_E = cp_SE[CellParams::PERBX];
       perBz_N = cp_NW[CellParams::PERBZ];
-      Vx0  = divideIfNonZero(cp_SW[CellParams::RHOVX], cp_SW[CellParams::RHO]);
-      Vz0  = divideIfNonZero(cp_SW[CellParams::RHOVZ], cp_SW[CellParams::RHO]);
-      minRho = min(minRho,
-                  min(cp_SW[CellParams::RHO],
-                     min(cp_SE[CellParams::RHO],
-                        min(cp_NW[CellParams::RHO],
-                            cp_NE[CellParams::RHO])
+      Vx0  = divideIfNonZero(cp_SW[CellParams::RHOMVX], cp_SW[CellParams::RHOM]);
+      Vz0  = divideIfNonZero(cp_SW[CellParams::RHOMVZ], cp_SW[CellParams::RHOM]);
+      rhoq_S = FOURTH*(cp_SW[CellParams::RHOQ] + cp_SE[CellParams::RHOQ] + cp_NW[CellParams::RHOQ] + cp_NE[CellParams::RHOQ]);
+      minRhom = min(minRhom,
+                  min(cp_SW[CellParams::RHOM],
+                     min(cp_SE[CellParams::RHOM],
+                        min(cp_NW[CellParams::RHOM],
+                            cp_NE[CellParams::RHOM])
                         )
                      )
                   );
-      maxRho = max(maxRho,
-                  max(cp_SW[CellParams::RHO],
-                     max(cp_SE[CellParams::RHO],
-                        max(cp_NW[CellParams::RHO],
-                            cp_NE[CellParams::RHO])
+      maxRhom = max(maxRhom,
+                  max(cp_SW[CellParams::RHOM],
+                     max(cp_SE[CellParams::RHOM],
+                        max(cp_NW[CellParams::RHOM],
+                            cp_NE[CellParams::RHOM])
                         )
                      )
                   );
@@ -744,25 +819,27 @@ void calculateEdgeElectricFieldY(
       perBx_W = cp_SW[CellParams::PERBX_DT2];
       perBx_E = cp_SE[CellParams::PERBX_DT2];
       perBz_N = cp_NW[CellParams::PERBZ_DT2];
-      Vx0  = divideIfNonZero(cp_SW[CellParams::RHOVX_DT2], cp_SW[CellParams::RHO_DT2]);
-      Vz0  = divideIfNonZero(cp_SW[CellParams::RHOVZ_DT2], cp_SW[CellParams::RHO_DT2]);
-      minRho = min(minRho,
-                  min(cp_SW[CellParams::RHO_DT2],
-                     min(cp_SE[CellParams::RHO_DT2],
-                        min(cp_NW[CellParams::RHO_DT2],
-                            cp_NE[CellParams::RHO_DT2])
+      Vx0  = divideIfNonZero(cp_SW[CellParams::RHOMVX_DT2], cp_SW[CellParams::RHOM_DT2]);
+      Vz0  = divideIfNonZero(cp_SW[CellParams::RHOMVZ_DT2], cp_SW[CellParams::RHOM_DT2]);
+      rhoq_S = FOURTH*(cp_SW[CellParams::RHOQ_DT2] + cp_SE[CellParams::RHOQ_DT2] + cp_NW[CellParams::RHOQ_DT2] + cp_NE[CellParams::RHOQ_DT2]);
+      minRhom = min(minRhom,
+                  min(cp_SW[CellParams::RHOM_DT2],
+                     min(cp_SE[CellParams::RHOM_DT2],
+                        min(cp_NW[CellParams::RHOM_DT2],
+                            cp_NE[CellParams::RHOM_DT2])
                         )
                      )
                   );
-      maxRho = max(maxRho,
-                  max(cp_SW[CellParams::RHO_DT2],
-                     max(cp_SE[CellParams::RHO_DT2],
-                        max(cp_NW[CellParams::RHO_DT2],
-                            cp_NE[CellParams::RHO_DT2])
+      maxRhom = max(maxRhom,
+                  max(cp_SW[CellParams::RHOM_DT2],
+                     max(cp_SE[CellParams::RHOM_DT2],
+                        max(cp_NW[CellParams::RHOM_DT2],
+                            cp_NE[CellParams::RHOM_DT2])
                         )
                      )
                   );
    }
+   rhoq_S = (rhoq_S <= Parameters::hallMinimumRhoq) ? Parameters::hallMinimumRhoq : rhoq_S ;
    
    creal dBxdy_W = derivs_SW[fs::dPERBxdy] + derivs_SW[fs::dBGBxdy];
    creal dBxdz_W = derivs_SW[fs::dPERBxdz] + derivs_SW[fs::dBGBxdz];
@@ -791,13 +868,13 @@ void calculateEdgeElectricFieldY(
           (cp_SW[CellParams::BGBZ]+cp_SW[CellParams::PERBZ])*
           (cp_SW[CellParams::BGBZ]+cp_SW[CellParams::PERBZ])
          ) /
-     (cp_SW[CellParams::RHO]*physicalconstants::CHARGE) /
+     cp_SW[CellParams::RHOQ] /
      physicalconstants::MU_0 *
      (derivs_SW[fs::dPERBxdz]/cp_SW[CellParams::DZ] - derivs_SW[fs::dPERBzdx]/cp_SW[CellParams::DX]);
    
    // Hall term
    if (Parameters::ohmHallTerm > 0) {
-      Ey_SW += cp_SW[CellParams::EYHALL_000_010];
+      Ey_SW += cp_SW[CellParams::EYHALL_000_010] / (rhoq_S*physicalconstants::MU_0);
    }
    
    // Electron pressure gradient term
@@ -813,21 +890,23 @@ void calculateEdgeElectricFieldY(
    
    creal* const nbr_cp_SW     = cache.cells[fs_cache::calculateNbrID(1  ,1+1,1  )]->parameters;
    creal* const nbr_derivs_SW = cache.cells[fs_cache::calculateNbrID(1  ,1+1,1  )]->derivatives;
-
-   c_z = calculateWaveSpeedXZ(cp_SW, derivs_SW, nbr_cp_SW, nbr_derivs_SW, Bx_W, Bz_S, dBxdy_W, dBxdz_W, dBzdx_S, dBzdy_S, MINUS, MINUS, minRho, maxRho, RKCase);
+   
+   calculateWaveSpeedXZ(cp_SW, derivs_SW, nbr_cp_SW, nbr_derivs_SW, Bx_W, Bz_S, dBxdy_W, dBxdz_W, dBzdx_S, dBzdy_S, MINUS, MINUS, minRhom, maxRhom, RKCase, vA, vS, vW);
+   c_z = min(Parameters::maxWaveVelocity,sqrt(vA*vA + vS*vS));
    c_x = c_z;
    az_neg   = max(ZERO,-Vz0 + c_z);
    az_pos   = max(ZERO,+Vz0 + c_z);
    ax_neg   = max(ZERO,-Vx0 + c_x);
    ax_pos   = max(ZERO,+Vx0 + c_x);
+   maxV = max(maxV, calculateCflSpeed(Vz0, Vx0, vA, vS, vW));
 
    // Ey and characteristic speeds on k-1 neighbour:
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
-      Vx0  = divideIfNonZero(cp_SE[CellParams::RHOVX], cp_SE[CellParams::RHO]);
-      Vz0  = divideIfNonZero(cp_SE[CellParams::RHOVZ], cp_SE[CellParams::RHO]);
+      Vx0  = divideIfNonZero(cp_SE[CellParams::RHOMVX], cp_SE[CellParams::RHOM]);
+      Vz0  = divideIfNonZero(cp_SE[CellParams::RHOMVZ], cp_SE[CellParams::RHOM]);
    } else { //RKCase == RK_ORDER2_STEP1
-      Vx0  = divideIfNonZero(cp_SE[CellParams::RHOVX_DT2], cp_SE[CellParams::RHO_DT2]);
-      Vz0  = divideIfNonZero(cp_SE[CellParams::RHOVZ_DT2], cp_SE[CellParams::RHO_DT2]);
+      Vx0  = divideIfNonZero(cp_SE[CellParams::RHOMVX_DT2], cp_SE[CellParams::RHOM_DT2]);
+      Vz0  = divideIfNonZero(cp_SE[CellParams::RHOMVZ_DT2], cp_SE[CellParams::RHOM_DT2]);
    }
 
    // 1st order terms:
@@ -843,13 +922,13 @@ void calculateEdgeElectricFieldY(
           (cp_SE[CellParams::BGBZ]+cp_SE[CellParams::PERBZ])*
           (cp_SE[CellParams::BGBZ]+cp_SE[CellParams::PERBZ])
          ) /
-     (cp_SE[CellParams::RHO]*physicalconstants::CHARGE) /
+     cp_SE[CellParams::RHOQ] /
      physicalconstants::MU_0 *
      (derivs_SE[fs::dPERBxdz]/cp_SE[CellParams::DZ] - derivs_SE[fs::dPERBzdx]/cp_SE[CellParams::DX]);
 
    // Hall term
    if (Parameters::ohmHallTerm > 0) {
-      Ey_SE += cp_SE[CellParams::EYHALL_001_011];
+      Ey_SE += cp_SE[CellParams::EYHALL_001_011] / (rhoq_S*physicalconstants::MU_0);
    }
    
    // Electron pressure gradient term
@@ -865,20 +944,23 @@ void calculateEdgeElectricFieldY(
    
    creal* const nbr_cp_SE     = cache.cells[fs_cache::calculateNbrID(1  ,1+1,1-1)]->parameters;
    creal* const nbr_derivs_SE = cache.cells[fs_cache::calculateNbrID(1  ,1+1,1-1)]->derivatives;
-   c_z = calculateWaveSpeedXZ(cp_SE, derivs_SE, nbr_cp_SE, nbr_derivs_SE, Bx_E, Bz_S, dBxdy_E, dBxdz_E, dBzdx_S, dBzdy_S, MINUS, PLUS, minRho, maxRho, RKCase);
+   
+   calculateWaveSpeedXZ(cp_SE, derivs_SE, nbr_cp_SE, nbr_derivs_SE, Bx_E, Bz_S, dBxdy_E, dBxdz_E, dBzdx_S, dBzdy_S, MINUS, PLUS, minRhom, maxRhom, RKCase, vA, vS, vW);
+   c_z = min(Parameters::maxWaveVelocity,sqrt(vA*vA + vS*vS));
    c_x = c_z;
    az_neg   = max(az_neg,-Vz0 + c_z);
    az_pos   = max(az_pos,+Vz0 + c_z);
    ax_neg   = max(ax_neg,-Vx0 + c_x);
    ax_pos   = max(ax_pos,+Vx0 + c_x);
+   maxV = max(maxV, calculateCflSpeed(Vz0, Vx0, vA, vS, vW));
    
    // Ey and characteristic speeds on i-1 neighbour:
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
-      Vz0  = divideIfNonZero(cp_NW[CellParams::RHOVZ], cp_NW[CellParams::RHO]);
-      Vx0  = divideIfNonZero(cp_NW[CellParams::RHOVX], cp_NW[CellParams::RHO]);
+      Vz0  = divideIfNonZero(cp_NW[CellParams::RHOMVZ], cp_NW[CellParams::RHOM]);
+      Vx0  = divideIfNonZero(cp_NW[CellParams::RHOMVX], cp_NW[CellParams::RHOM]);
    } else { //RKCase == RK_ORDER2_STEP1
-      Vz0  = divideIfNonZero(cp_NW[CellParams::RHOVZ_DT2], cp_NW[CellParams::RHO_DT2]);
-      Vx0  = divideIfNonZero(cp_NW[CellParams::RHOVX_DT2], cp_NW[CellParams::RHO_DT2]);
+      Vz0  = divideIfNonZero(cp_NW[CellParams::RHOMVZ_DT2], cp_NW[CellParams::RHOM_DT2]);
+      Vx0  = divideIfNonZero(cp_NW[CellParams::RHOMVX_DT2], cp_NW[CellParams::RHOM_DT2]);
    }
    
    // 1st order terms:
@@ -894,13 +976,13 @@ void calculateEdgeElectricFieldY(
           (cp_NW[CellParams::BGBZ]+cp_NW[CellParams::PERBZ])*
           (cp_NW[CellParams::BGBZ]+cp_NW[CellParams::PERBZ])
          ) /
-     (cp_NW[CellParams::RHO]*physicalconstants::CHARGE) /
+     cp_NW[CellParams::RHOQ] /
      physicalconstants::MU_0 *
      (derivs_NW[fs::dPERBxdz]/cp_NW[CellParams::DZ] - derivs_NW[fs::dPERBzdx]/cp_NW[CellParams::DX]);
 
    // Hall term
    if(Parameters::ohmHallTerm > 0) {
-      Ey_NW += cp_NW[CellParams::EYHALL_100_110];
+      Ey_NW += cp_NW[CellParams::EYHALL_100_110] / (rhoq_S*physicalconstants::MU_0);
    }
    
    // Electron pressure gradient term
@@ -916,20 +998,23 @@ void calculateEdgeElectricFieldY(
    
    creal* const nbr_cp_NW     = cache.cells[fs_cache::calculateNbrID(1-1,1+1,1  )]->parameters;
    creal* const nbr_derivs_NW = cache.cells[fs_cache::calculateNbrID(1-1,1+1,1  )]->derivatives;
-   c_z = calculateWaveSpeedXZ(cp_NW, derivs_NW, nbr_cp_NW, nbr_derivs_NW, Bx_W, Bz_N, dBxdy_W, dBxdz_W, dBzdx_N, dBzdy_N, PLUS, MINUS, minRho, maxRho, RKCase);
+   
+   calculateWaveSpeedXZ(cp_NW, derivs_NW, nbr_cp_NW, nbr_derivs_NW, Bx_W, Bz_N, dBxdy_W, dBxdz_W, dBzdx_N, dBzdy_N, PLUS, MINUS, minRhom, maxRhom, RKCase, vA, vS, vW);
+   c_z = min(Parameters::maxWaveVelocity,sqrt(vA*vA + vS*vS));
    c_x = c_z;
    az_neg   = max(az_neg,-Vz0 + c_z);
    az_pos   = max(az_pos,+Vz0 + c_z);
    ax_neg   = max(ax_neg,-Vx0 + c_x);
    ax_pos   = max(ax_pos,+Vx0 + c_x);
+   maxV = max(maxV, calculateCflSpeed(Vz0, Vx0, vA, vS, vW));
 
    // Ey and characteristic speeds on i-1,k-1 neighbour:
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
-      Vz0 = divideIfNonZero(cp_NE[CellParams::RHOVZ], cp_NE[CellParams::RHO]);
-      Vx0 = divideIfNonZero(cp_NE[CellParams::RHOVX], cp_NE[CellParams::RHO]);
+      Vz0 = divideIfNonZero(cp_NE[CellParams::RHOMVZ], cp_NE[CellParams::RHOM]);
+      Vx0 = divideIfNonZero(cp_NE[CellParams::RHOMVX], cp_NE[CellParams::RHOM]);
    } else { //RKCase == RK_ORDER2_STEP1
-      Vz0 = divideIfNonZero(cp_NE[CellParams::RHOVZ_DT2], cp_NE[CellParams::RHO_DT2]);
-      Vx0 = divideIfNonZero(cp_NE[CellParams::RHOVX_DT2], cp_NE[CellParams::RHO_DT2]);
+      Vz0 = divideIfNonZero(cp_NE[CellParams::RHOMVZ_DT2], cp_NE[CellParams::RHOM_DT2]);
+      Vx0 = divideIfNonZero(cp_NE[CellParams::RHOMVX_DT2], cp_NE[CellParams::RHOM_DT2]);
    }
    
    // 1st order terms:
@@ -945,13 +1030,13 @@ void calculateEdgeElectricFieldY(
           (cp_NE[CellParams::BGBZ]+cp_NE[CellParams::PERBZ])*
           (cp_NE[CellParams::BGBZ]+cp_NE[CellParams::PERBZ])
          ) /
-     (cp_NE[CellParams::RHO]*physicalconstants::CHARGE) /
+     cp_NE[CellParams::RHOQ] /
      physicalconstants::MU_0 *
      (derivs_NE[fs::dPERBxdz]/cp_NE[CellParams::DZ] - derivs_NE[fs::dPERBzdx]/cp_NE[CellParams::DX]);
 
    // Hall term
    if(Parameters::ohmHallTerm > 0) {
-      Ey_NE += cp_NE[CellParams::EYHALL_101_111];
+      Ey_NE += cp_NE[CellParams::EYHALL_101_111] / (rhoq_S*physicalconstants::MU_0);
    }
    
    // Electron pressure gradient term
@@ -967,12 +1052,15 @@ void calculateEdgeElectricFieldY(
 
    creal* const nbr_cp_NE     = cache.cells[fs_cache::calculateNbrID(1-1,1+1,1-1)]->parameters;
    creal* const nbr_derivs_NE = cache.cells[fs_cache::calculateNbrID(1-1,1+1,1-1)]->derivatives;
-   c_z = calculateWaveSpeedXZ(cp_NE, derivs_NE, nbr_cp_NE, nbr_derivs_NE, Bx_E, Bz_N, dBxdy_E, dBxdz_E, dBzdx_N, dBzdy_N, PLUS, PLUS, minRho, maxRho, RKCase);
+   
+   calculateWaveSpeedXZ(cp_NE, derivs_NE, nbr_cp_NE, nbr_derivs_NE, Bx_E, Bz_N, dBxdy_E, dBxdz_E, dBzdx_N, dBzdy_N, PLUS, PLUS, minRhom, maxRhom, RKCase, vA, vS, vW);
+   c_z = min(Parameters::maxWaveVelocity,sqrt(vA*vA + vS*vS));
    c_x = c_z;
    az_neg   = max(az_neg,-Vz0 + c_z);
    az_pos   = max(az_pos,+Vz0 + c_z);
    ax_neg   = max(ax_neg,-Vx0 + c_x);
    ax_pos   = max(ax_pos,+Vx0 + c_x);
+   maxV = max(maxV, calculateCflSpeed(Vz0, Vx0, vA, vS, vW));
 
    // Calculate properly upwinded edge-averaged Ey:
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
@@ -1004,16 +1092,11 @@ void calculateEdgeElectricFieldY(
    
    if ((RKCase == RK_ORDER1) || (RKCase == RK_ORDER2_STEP2)) {
       //compute maximum timestep for fieldsolver in this cell (CFL=1)      
-      Real max_a=ZERO;
-      max_a=max(fabs(az_neg),max_a);
-      max_a=max(fabs(az_pos),max_a);
-      max_a=max(fabs(ax_neg),max_a);
-      max_a=max(fabs(ax_pos),max_a);
       Real min_dx=std::numeric_limits<Real>::max();;
       min_dx=min(min_dx,cp_SW[CellParams::DX]);
       min_dx=min(min_dx,cp_SW[CellParams::DZ]);
       //update max allowed timestep for field propagation in this cell, which is the minimum of CFL=1 timesteps
-      if (max_a!=ZERO) cp_SW[CellParams::MAXFDT]=min(cp_SW[CellParams::MAXFDT],min_dx/max_a);
+      if (maxV!=ZERO) cp_SW[CellParams::MAXFDT]=min(cp_SW[CellParams::MAXFDT],min_dx/maxV);
    }
 }
 
@@ -1049,6 +1132,8 @@ void calculateEdgeElectricFieldZ(
    Real ax_pos,ax_neg;              // Max. characteristic velocities to x-direction
    Real ay_pos,ay_neg;              // Max. characteristic velocities to y-direction
    Real Vx0,Vy0;                    // Reconstructed V
+   Real vA, vS, vW;                         // Alfven, sound, whistler speed
+   Real maxV = 0.0;                 // Max velocity for CFL purposes
    Real c_x,c_y;                    // Characteristic speeds to xy-directions
    
    // Get read-only pointers to NE,NW,SE,SW states (SW is rw, result is written there):
@@ -1063,9 +1148,9 @@ void calculateEdgeElectricFieldZ(
    creal* const derivs_NW = cache.cells[fs_cache::calculateNbrID(1  ,1-1,1  )]->derivatives;
 
    // Fetch needed plasma parameters/derivatives from the four cells:
-   Real Bx_S, By_W, By_E, Bx_N, perBx_S, perBy_W, perBy_E, perBx_N;
-   Real minRho = std::numeric_limits<Real>::max();
-   Real maxRho = std::numeric_limits<Real>::min();
+   Real Bx_S, By_W, By_E, Bx_N, perBx_S, perBy_W, perBy_E, perBx_N, rhoq_S;
+   Real minRhom = std::numeric_limits<Real>::max();
+   Real maxRhom = std::numeric_limits<Real>::min();
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
       Bx_S    = cp_SW[CellParams::PERBX] + cp_SW[CellParams::BGBX];
       By_W    = cp_SW[CellParams::PERBY] + cp_SW[CellParams::BGBY];
@@ -1075,21 +1160,22 @@ void calculateEdgeElectricFieldZ(
       perBy_W    = cp_SW[CellParams::PERBY];
       perBy_E    = cp_SE[CellParams::PERBY];
       perBx_N    = cp_NW[CellParams::PERBX];
-      Vx0  = divideIfNonZero(cp_SW[CellParams::RHOVX], cp_SW[CellParams::RHO]);
-      Vy0  = divideIfNonZero(cp_SW[CellParams::RHOVY], cp_SW[CellParams::RHO]);
-      minRho = min(minRho,
-                  min(cp_SW[CellParams::RHO],
-                     min(cp_SE[CellParams::RHO],
-                        min(cp_NW[CellParams::RHO],
-                            cp_NE[CellParams::RHO])
+      Vx0  = divideIfNonZero(cp_SW[CellParams::RHOMVX], cp_SW[CellParams::RHOM]);
+      Vy0  = divideIfNonZero(cp_SW[CellParams::RHOMVY], cp_SW[CellParams::RHOM]);
+      rhoq_S = FOURTH*(cp_SW[CellParams::RHOQ] + cp_SE[CellParams::RHOQ] + cp_NW[CellParams::RHOQ] + cp_NE[CellParams::RHOQ]);
+      minRhom = min(minRhom,
+                  min(cp_SW[CellParams::RHOM],
+                     min(cp_SE[CellParams::RHOM],
+                        min(cp_NW[CellParams::RHOM],
+                            cp_NE[CellParams::RHOM])
                         )
                      )
                   );
-      maxRho = max(maxRho,
-                  max(cp_SW[CellParams::RHO],
-                     max(cp_SE[CellParams::RHO],
-                        max(cp_NW[CellParams::RHO],
-                            cp_NE[CellParams::RHO])
+      maxRhom = max(maxRhom,
+                  max(cp_SW[CellParams::RHOM],
+                     max(cp_SE[CellParams::RHOM],
+                        max(cp_NW[CellParams::RHOM],
+                            cp_NE[CellParams::RHOM])
                         )
                      )
                   );
@@ -1102,25 +1188,27 @@ void calculateEdgeElectricFieldZ(
       perBy_W    = cp_SW[CellParams::PERBY_DT2];
       perBy_E    = cp_SE[CellParams::PERBY_DT2];
       perBx_N    = cp_NW[CellParams::PERBX_DT2];
-      Vx0  = divideIfNonZero(cp_SW[CellParams::RHOVX_DT2], cp_SW[CellParams::RHO_DT2]);
-      Vy0  = divideIfNonZero(cp_SW[CellParams::RHOVY_DT2], cp_SW[CellParams::RHO_DT2]);
-      minRho = min(minRho,
-                  min(cp_SW[CellParams::RHO_DT2],
-                     min(cp_SE[CellParams::RHO_DT2],
-                        min(cp_NW[CellParams::RHO_DT2],
-                            cp_NE[CellParams::RHO_DT2])
+      Vx0  = divideIfNonZero(cp_SW[CellParams::RHOMVX_DT2], cp_SW[CellParams::RHOM_DT2]);
+      Vy0  = divideIfNonZero(cp_SW[CellParams::RHOMVY_DT2], cp_SW[CellParams::RHOM_DT2]);
+      rhoq_S = FOURTH*(cp_SW[CellParams::RHOQ_DT2] + cp_SE[CellParams::RHOQ_DT2] + cp_NW[CellParams::RHOQ_DT2] + cp_NE[CellParams::RHOQ_DT2]);
+      minRhom = min(minRhom,
+                  min(cp_SW[CellParams::RHOM_DT2],
+                     min(cp_SE[CellParams::RHOM_DT2],
+                        min(cp_NW[CellParams::RHOM_DT2],
+                            cp_NE[CellParams::RHOM_DT2])
                         )
                      )
                   );
-      maxRho = max(maxRho,
-                  max(cp_SW[CellParams::RHO_DT2],
-                     max(cp_SE[CellParams::RHO_DT2],
-                        max(cp_NW[CellParams::RHO_DT2],
-                            cp_NE[CellParams::RHO_DT2])
+      maxRhom = max(maxRhom,
+                  max(cp_SW[CellParams::RHOM_DT2],
+                     max(cp_SE[CellParams::RHOM_DT2],
+                        max(cp_NW[CellParams::RHOM_DT2],
+                            cp_NE[CellParams::RHOM_DT2])
                         )
                      )
                   );
    }
+   rhoq_S = (rhoq_S <= Parameters::hallMinimumRhoq) ? Parameters::hallMinimumRhoq : rhoq_S ;
    
    creal dBxdy_S = derivs_SW[fs::dPERBxdy] + derivs_SW[fs::dBGBxdy];
    creal dBxdz_S = derivs_SW[fs::dPERBxdz] + derivs_SW[fs::dBGBxdz];
@@ -1149,13 +1237,13 @@ void calculateEdgeElectricFieldZ(
           (cp_SW[CellParams::BGBZ]+cp_SW[CellParams::PERBZ])*
           (cp_SW[CellParams::BGBZ]+cp_SW[CellParams::PERBZ])
          ) /
-     (cp_SW[CellParams::RHO]*physicalconstants::CHARGE) /
+     cp_SW[CellParams::RHOQ] /
      physicalconstants::MU_0 *
      (derivs_SW[fs::dPERBydx]/cp_SW[CellParams::DX] - derivs_SW[fs::dPERBxdy]/cp_SW[CellParams::DY]);
    
    // Hall term
    if (Parameters::ohmHallTerm > 0) {
-      Ez_SW += cp_SW[CellParams::EZHALL_000_001];
+      Ez_SW += cp_SW[CellParams::EZHALL_000_001] / (rhoq_S*physicalconstants::MU_0);
    }
    
    // Electron pressure gradient term
@@ -1173,20 +1261,23 @@ void calculateEdgeElectricFieldZ(
    // to get Alfven speed we need to calculate some reconstruction coeff. for Bz:
    creal* const nbr_cp_SW     = cache.cells[fs_cache::calculateNbrID(1  ,1  ,1+1)]->parameters;
    creal* const nbr_derivs_SW = cache.cells[fs_cache::calculateNbrID(1  ,1  ,1+1)]->derivatives;
-   c_x = calculateWaveSpeedXY(cp_SW, derivs_SW, nbr_cp_SW, nbr_derivs_SW, Bx_S, By_W, dBxdy_S, dBxdz_S, dBydx_W, dBydz_W, MINUS, MINUS, minRho, maxRho, RKCase);
+   
+   calculateWaveSpeedXY(cp_SW, derivs_SW, nbr_cp_SW, nbr_derivs_SW, Bx_S, By_W, dBxdy_S, dBxdz_S, dBydx_W, dBydz_W, MINUS, MINUS, minRhom, maxRhom, RKCase, vA, vS, vW);
+   c_x = min(Parameters::maxWaveVelocity,sqrt(vA*vA + vS*vS));
    c_y = c_x;
    ax_neg   = max(ZERO,-Vx0 + c_x);
    ax_pos   = max(ZERO,+Vx0 + c_x);
    ay_neg   = max(ZERO,-Vy0 + c_y);
    ay_pos   = max(ZERO,+Vy0 + c_y);
+   maxV = max(maxV, calculateCflSpeed(Vx0, Vy0, vA, vS, vW));
 
    // Ez and characteristic speeds on SE (i-1) cell:
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
-      Vx0  = divideIfNonZero(cp_SE[CellParams::RHOVX], cp_SE[CellParams::RHO]);
-      Vy0  = divideIfNonZero(cp_SE[CellParams::RHOVY], cp_SE[CellParams::RHO]);
+      Vx0  = divideIfNonZero(cp_SE[CellParams::RHOMVX], cp_SE[CellParams::RHOM]);
+      Vy0  = divideIfNonZero(cp_SE[CellParams::RHOMVY], cp_SE[CellParams::RHOM]);
    } else { // RKCase == RK_ORDER2_STEP1
-      Vx0  = divideIfNonZero(cp_SE[CellParams::RHOVX_DT2], cp_SE[CellParams::RHO_DT2]);
-      Vy0  = divideIfNonZero(cp_SE[CellParams::RHOVY_DT2], cp_SE[CellParams::RHO_DT2]);
+      Vx0  = divideIfNonZero(cp_SE[CellParams::RHOMVX_DT2], cp_SE[CellParams::RHOM_DT2]);
+      Vy0  = divideIfNonZero(cp_SE[CellParams::RHOMVY_DT2], cp_SE[CellParams::RHOM_DT2]);
    }
    
    // 1st order terms:
@@ -1202,12 +1293,13 @@ void calculateEdgeElectricFieldZ(
           (cp_SE[CellParams::BGBZ]+cp_SE[CellParams::PERBZ])*
           (cp_SE[CellParams::BGBZ]+cp_SE[CellParams::PERBZ])
          ) /
-     (cp_SE[CellParams::RHO]*physicalconstants::CHARGE) /
+     cp_SE[CellParams::RHOQ] /
      physicalconstants::MU_0 *
      (derivs_SE[fs::dPERBydx]/cp_SE[CellParams::DX] - derivs_SE[fs::dPERBxdy]/cp_SE[CellParams::DY]);
+   
    // Hall term
    if (Parameters::ohmHallTerm > 0) {
-      Ez_SE += cp_SE[CellParams::EZHALL_100_101];
+      Ez_SE += cp_SE[CellParams::EZHALL_100_101] / (rhoq_S*physicalconstants::MU_0);
    }
    
    // Electron pressure gradient term
@@ -1223,20 +1315,23 @@ void calculateEdgeElectricFieldZ(
    
    creal* const nbr_cp_SE     = cache.cells[fs_cache::calculateNbrID(1-1,1  ,1+1)]->parameters;
    creal* const nbr_derivs_SE = cache.cells[fs_cache::calculateNbrID(1-1,1  ,1+1)]->derivatives;
-   c_x = calculateWaveSpeedXY(cp_SE, derivs_SE, nbr_cp_SE, nbr_derivs_SE, Bx_S, By_E, dBxdy_S, dBxdz_S, dBydx_E, dBydz_E, PLUS, MINUS, minRho, maxRho, RKCase);
+   
+   calculateWaveSpeedXY(cp_SE, derivs_SE, nbr_cp_SE, nbr_derivs_SE, Bx_S, By_E, dBxdy_S, dBxdz_S, dBydx_E, dBydz_E, PLUS, MINUS, minRhom, maxRhom, RKCase, vA, vS, vW);
+   c_x = min(Parameters::maxWaveVelocity,sqrt(vA*vA + vS*vS));
    c_y = c_x;
    ax_neg = max(ax_neg,-Vx0 + c_x);
    ax_pos = max(ax_pos,+Vx0 + c_x);
    ay_neg = max(ay_neg,-Vy0 + c_y);
    ay_pos = max(ay_pos,+Vy0 + c_y);
+   maxV = max(maxV, calculateCflSpeed(Vx0, Vy0, vA, vS, vW));
 
    // Ez and characteristic speeds on NW (j-1) cell:
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
-      Vx0  = divideIfNonZero(cp_NW[CellParams::RHOVX], cp_NW[CellParams::RHO]);
-      Vy0  = divideIfNonZero(cp_NW[CellParams::RHOVY], cp_NW[CellParams::RHO]);
+      Vx0  = divideIfNonZero(cp_NW[CellParams::RHOMVX], cp_NW[CellParams::RHOM]);
+      Vy0  = divideIfNonZero(cp_NW[CellParams::RHOMVY], cp_NW[CellParams::RHOM]);
    } else { // RKCase == RK_ORDER2_STEP1
-      Vx0  = divideIfNonZero(cp_NW[CellParams::RHOVX_DT2], cp_NW[CellParams::RHO_DT2]);
-      Vy0  = divideIfNonZero(cp_NW[CellParams::RHOVY_DT2], cp_NW[CellParams::RHO_DT2]);
+      Vx0  = divideIfNonZero(cp_NW[CellParams::RHOMVX_DT2], cp_NW[CellParams::RHOM_DT2]);
+      Vy0  = divideIfNonZero(cp_NW[CellParams::RHOMVY_DT2], cp_NW[CellParams::RHOM_DT2]);
    }
 
    // 1st order terms:
@@ -1252,13 +1347,13 @@ void calculateEdgeElectricFieldZ(
           (cp_NW[CellParams::BGBZ]+cp_NW[CellParams::PERBZ])*
           (cp_NW[CellParams::BGBZ]+cp_NW[CellParams::PERBZ])
          ) /
-     (cp_NW[CellParams::RHO]*physicalconstants::CHARGE) /
+     cp_NW[CellParams::RHOQ] /
      physicalconstants::MU_0 *
      (derivs_NW[fs::dPERBydx]/cp_NW[CellParams::DX] - derivs_NW[fs::dPERBxdy]/cp_NW[CellParams::DY]);
 
    // Hall term
    if(Parameters::ohmHallTerm > 0) {
-      Ez_NW += cp_NW[CellParams::EZHALL_010_011];
+      Ez_NW += cp_NW[CellParams::EZHALL_010_011] / (rhoq_S*physicalconstants::MU_0);
    }
    
    // Electron pressure gradient term
@@ -1274,20 +1369,23 @@ void calculateEdgeElectricFieldZ(
    
    creal* const nbr_cp_NW     = cache.cells[fs_cache::calculateNbrID(1  ,1-1,1+1)]->parameters;
    creal* const nbr_derivs_NW = cache.cells[fs_cache::calculateNbrID(1  ,1-1,1+1)]->derivatives;
-   c_x = calculateWaveSpeedXY(cp_NW, derivs_NW, nbr_cp_NW, nbr_derivs_NW, Bx_N, By_W, dBxdy_N, dBxdz_N, dBydx_W, dBydz_W, MINUS, PLUS, minRho, maxRho, RKCase);
+   
+   calculateWaveSpeedXY(cp_NW, derivs_NW, nbr_cp_NW, nbr_derivs_NW, Bx_N, By_W, dBxdy_N, dBxdz_N, dBydx_W, dBydz_W, MINUS, PLUS, minRhom, maxRhom, RKCase, vA, vS, vW);
+   c_x = min(Parameters::maxWaveVelocity,sqrt(vA*vA + vS*vS));
    c_y = c_x;
    ax_neg = max(ax_neg,-Vx0 + c_x); 
    ax_pos = max(ax_pos,+Vx0 + c_x);
    ay_neg = max(ay_neg,-Vy0 + c_y);
    ay_pos = max(ay_pos,+Vy0 + c_y);
+   maxV = max(maxV, calculateCflSpeed(Vx0, Vy0, vA, vS, vW));
    
    // Ez and characteristic speeds on NE (i-1,j-1) cell:
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
-      Vx0  = divideIfNonZero(cp_NE[CellParams::RHOVX], cp_NE[CellParams::RHO]);
-      Vy0  = divideIfNonZero(cp_NE[CellParams::RHOVY], cp_NE[CellParams::RHO]);
+      Vx0  = divideIfNonZero(cp_NE[CellParams::RHOMVX], cp_NE[CellParams::RHOM]);
+      Vy0  = divideIfNonZero(cp_NE[CellParams::RHOMVY], cp_NE[CellParams::RHOM]);
    } else { // RKCase == RK_ORDER2_STEP1
-      Vx0  = divideIfNonZero(cp_NE[CellParams::RHOVX_DT2], cp_NE[CellParams::RHO_DT2]);
-      Vy0  = divideIfNonZero(cp_NE[CellParams::RHOVY_DT2], cp_NE[CellParams::RHO_DT2]);
+      Vx0  = divideIfNonZero(cp_NE[CellParams::RHOMVX_DT2], cp_NE[CellParams::RHOM_DT2]);
+      Vy0  = divideIfNonZero(cp_NE[CellParams::RHOMVY_DT2], cp_NE[CellParams::RHOM_DT2]);
    }
    
    // 1st order terms:
@@ -1303,13 +1401,13 @@ void calculateEdgeElectricFieldZ(
           (cp_NE[CellParams::BGBZ]+cp_NE[CellParams::PERBZ])*
           (cp_NE[CellParams::BGBZ]+cp_NE[CellParams::PERBZ])
          ) /
-     (cp_NE[CellParams::RHO]*physicalconstants::CHARGE) /
+     cp_NE[CellParams::RHOQ] /
      physicalconstants::MU_0 *
      (derivs_NE[fs::dPERBydx]/cp_NE[CellParams::DX] - derivs_NE[fs::dPERBxdy]/cp_NE[CellParams::DY]);
    
    // Hall term
    if(Parameters::ohmHallTerm > 0) {
-      Ez_NE += cp_NE[CellParams::EZHALL_110_111];
+      Ez_NE += cp_NE[CellParams::EZHALL_110_111] / (rhoq_S*physicalconstants::MU_0);
    }
    
    // Electron pressure gradient term
@@ -1325,12 +1423,15 @@ void calculateEdgeElectricFieldZ(
    
    creal* const nbr_cp_NE     = cache.cells[fs_cache::calculateNbrID(1-1,1-1,1+1)]->parameters;
    creal* const nbr_derivs_NE = cache.cells[fs_cache::calculateNbrID(1-1,1-1,1+1)]->derivatives;
-   c_x = calculateWaveSpeedXY(cp_NE, derivs_NE, nbr_cp_NE, nbr_derivs_NE, Bx_N, By_E, dBxdy_N, dBxdz_N, dBydx_E, dBydz_E, PLUS, PLUS, minRho, maxRho, RKCase);
+   
+   calculateWaveSpeedXY(cp_NE, derivs_NE, nbr_cp_NE, nbr_derivs_NE, Bx_N, By_E, dBxdy_N, dBxdz_N, dBydx_E, dBydz_E, PLUS, PLUS, minRhom, maxRhom, RKCase, vA, vS, vW);
+   c_x = min(Parameters::maxWaveVelocity,sqrt(vA*vA + vS*vS));
    c_y = c_x;
    ax_neg = max(ax_neg,-Vx0 + c_x);
    ax_pos = max(ax_pos,+Vx0 + c_x);
    ay_neg = max(ay_neg,-Vy0 + c_y);
    ay_pos = max(ay_pos,+Vy0 + c_y);
+   maxV = max(maxV, calculateCflSpeed(Vx0, Vy0, vA, vS, vW));
 
    // Calculate properly upwinded edge-averaged Ez:
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
@@ -1363,16 +1464,11 @@ void calculateEdgeElectricFieldZ(
    
    if ((RKCase == RK_ORDER1) || (RKCase == RK_ORDER2_STEP2)) {
       //compute maximum timestep for fieldsolver in this cell (CFL=1)      
-      Real max_a=ZERO;
-      max_a=max(fabs(ay_neg),max_a);
-      max_a=max(fabs(ay_pos),max_a);
-      max_a=max(fabs(ax_neg),max_a);
-      max_a=max(fabs(ax_pos),max_a);
       Real min_dx=std::numeric_limits<Real>::max();;
       min_dx=min(min_dx,cp_SW[CellParams::DX]);
       min_dx=min(min_dx,cp_SW[CellParams::DY]);
       //update max allowed timestep for field propagation in this cell, which is the minimum of CFL=1 timesteps
-      if(max_a!=ZERO) cp_SW[CellParams::MAXFDT]=min(cp_SW[CellParams::MAXFDT],min_dx/max_a);
+      if(maxV!=ZERO) cp_SW[CellParams::MAXFDT]=min(cp_SW[CellParams::MAXFDT],min_dx/maxV);
    }
 }
 

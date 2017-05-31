@@ -71,7 +71,7 @@ void calculateSpatialTranslation(
         const vector<CellID>& remoteTargetCellsy,
         const vector<CellID>& remoteTargetCellsz,
         creal dt,
-        const int& popID) {
+        const uint popID) {
 
     int trans_timer;
     bool localTargetGridGenerated = false;
@@ -286,7 +286,7 @@ void calculateSpatialTranslation(
    phiprof::stop("compute_cell_lists");
 
    // Translate all particle species
-   for (int popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID) {
+   for (uint popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID) {
       string profName = "translate "+getObjectWrapper().particleSpecies[popID].name;
       phiprof::start(profName);
       SpatialCell::setCommunicatedSpecies(popID);
@@ -322,12 +322,17 @@ momentCalculation:
  * @param mpiGrid Parallel grid library.
  * @param propagatedCells List of cells in which the population is accelerated.
  * @param dt Timestep.*/
-void calculateAcceleration(const int& popID,const int& globalMaxSubcycles,const uint& step,
+void calculateAcceleration(const uint popID,const uint globalMaxSubcycles,const uint step,
                            dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
                            const std::vector<CellID>& propagatedCells,
                            const Real& dt) {
    // Set active population
    SpatialCell::setCommunicatedSpecies(popID);
+   
+   // Calculate velocity moments, these are needed to 
+   // calculate the transforms used in the accelerations.
+   // Calculated moments are stored in the "_V" variables.
+   calculateMoments_V(mpiGrid, propagatedCells, false);
 
    // Semi-Lagrangian acceleration for those cells which are subcycled
    #pragma omp parallel for schedule(dynamic,1)
@@ -397,19 +402,15 @@ void calculateAcceleration(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& 
       // Even if acceleration is turned off we need to adjust velocity blocks 
       // because the boundary conditions may have altered the velocity space, 
       // and to update changes in no-content blocks during translation.
-      for (int popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID)
+      for (uint popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID)
         adjustVelocityBlocks(mpiGrid, cells, true, popID);
       goto momentCalculation;
    }
    phiprof::start("semilag-acc");
     
-    // Calculate first velocity moments, these are needed to 
-    // calculate the transforms used in the accelerations.
-    // Calculated moments are stored in the "_V" variables.
-   calculateMoments_V(mpiGrid,cells,false);
    
    // Accelerate all particle species
-    for (int popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID) {
+    for (uint popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID) {
        int maxSubcycles=0;
        int globalMaxSubcycles;
 
@@ -430,16 +431,16 @@ void calculateAcceleration(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& 
              //prepare for acceleration, updates max dt for each cell
              prepareAccelerateCell(SC, popID);
              //update max subcycles for all cells in this process
-#warning CellParams::ACCSUBCYCLES does not support multiple populations
-             SC->parameters[CellParams::ACCSUBCYCLES] = getAccelerationSubcycles(SC, dt, popID);
-             maxSubcycles = max(getAccelerationSubcycles(SC, dt, popID), maxSubcycles);
+             maxSubcycles = max((int)getAccelerationSubcycles(SC, dt, popID), maxSubcycles);
+             spatial_cell::Population& pop = SC->get_population(popID);
+             pop.ACCSUBCYCLES = getAccelerationSubcycles(SC, dt, popID);
           }
        }       
        // Compute global maximum for number of subcycles
        MPI_Allreduce(&maxSubcycles, &globalMaxSubcycles, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD);
 
        // substep global max times
-       for(uint step=0; step<globalMaxSubcycles; ++step) {
+       for(uint step=0; step<(uint)globalMaxSubcycles; ++step) {
           if(step > 0) {
              // prune list of cells to propagate to only contained those which are now subcycled
              vector<CellID> temp;
@@ -451,8 +452,8 @@ void calculateAcceleration(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& 
              
              propagatedCells.swap(temp);
           }
-       
-          calculateAcceleration(popID,globalMaxSubcycles,step,mpiGrid,propagatedCells,dt);
+          // Accelerate population over one subcycle step
+          calculateAcceleration(popID,(uint)globalMaxSubcycles,step,mpiGrid,propagatedCells,dt);
        } // for-loop over acceleration substeps
        
        // final adjust for all cells, also fixing remote cells.
@@ -470,7 +471,7 @@ momentCalculation:
    for (size_t c=0; c<cells.size(); ++c) {
       SpatialCell* cell = mpiGrid[cells[c]];
       cell->parameters[CellParams::MAXVDT] = numeric_limits<Real>::max();
-      for (int popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID) {
+      for (uint popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID) {
          cell->parameters[CellParams::MAXVDT]
            = min(cell->get_max_v_dt(popID), cell->parameters[CellParams::MAXVDT]);
       }
@@ -483,10 +484,11 @@ momentCalculation:
 
 void calculateInterpolatedVelocityMoments(
    dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
-   const int cp_rho,
-   const int cp_rhovx,
-   const int cp_rhovy,
-   const int cp_rhovz,
+   const int cp_rhom,
+   const int cp_rhomvx,
+   const int cp_rhomvy,
+   const int cp_rhomvz,
+   const int cp_rhoq,
    const int cp_p11,
    const int cp_p22,
    const int cp_p33
@@ -499,13 +501,23 @@ void calculateInterpolatedVelocityMoments(
       const CellID cellID = cells[c];
       SpatialCell* SC = mpiGrid[cellID];
       if(SC->sysBoundaryFlag == sysboundarytype::NOT_SYSBOUNDARY) {
-         SC->parameters[cp_rho  ] = 0.5* ( SC->parameters[CellParams::RHO_R] + SC->parameters[CellParams::RHO_V] );
-         SC->parameters[cp_rhovx] = 0.5* ( SC->parameters[CellParams::RHOVX_R] + SC->parameters[CellParams::RHOVX_V] );
-         SC->parameters[cp_rhovy] = 0.5* ( SC->parameters[CellParams::RHOVY_R] + SC->parameters[CellParams::RHOVY_V] );
-         SC->parameters[cp_rhovz] = 0.5* ( SC->parameters[CellParams::RHOVZ_R] + SC->parameters[CellParams::RHOVZ_V] );
+         SC->parameters[cp_rhom  ] = 0.5* ( SC->parameters[CellParams::RHOM_R] + SC->parameters[CellParams::RHOM_V] );
+         SC->parameters[cp_rhomvx] = 0.5* ( SC->parameters[CellParams::RHOMVX_R] + SC->parameters[CellParams::RHOMVX_V] );
+         SC->parameters[cp_rhomvy] = 0.5* ( SC->parameters[CellParams::RHOMVY_R] + SC->parameters[CellParams::RHOMVY_V] );
+         SC->parameters[cp_rhomvz] = 0.5* ( SC->parameters[CellParams::RHOMVZ_R] + SC->parameters[CellParams::RHOMVZ_V] );
+         SC->parameters[cp_rhoq  ] = 0.5* ( SC->parameters[CellParams::RHOQ_R] + SC->parameters[CellParams::RHOQ_V] );
          SC->parameters[cp_p11]   = 0.5* ( SC->parameters[CellParams::P_11_R] + SC->parameters[CellParams::P_11_V] );
          SC->parameters[cp_p22]   = 0.5* ( SC->parameters[CellParams::P_22_R] + SC->parameters[CellParams::P_22_V] );
          SC->parameters[cp_p33]   = 0.5* ( SC->parameters[CellParams::P_33_R] + SC->parameters[CellParams::P_33_V] );
+
+         for (uint popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID) {
+            spatial_cell::Population& pop = SC->get_population(popID);
+            pop.RHO = 0.5 * ( pop.RHO_R + pop.RHO_V );
+            for(int i=0; i<3; i++) {
+               pop.RHOV[i] = 0.5 * ( pop.RHOV_R[i] + pop.RHOV_V[i] );
+               pop.P[i]    = 0.5 * ( pop.P_R[i] + pop.P_V[i] );
+            }
+         }
       }
    }
 }
@@ -524,10 +536,11 @@ void calculateInitialVelocityMoments(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_G
       // WARNING the following is sane as this function is only called by initializeGrid.
       // We need initialized _DT2 values for the dt=0 field propagation done in the beginning.
       // Later these will be set properly.
-      SC->parameters[CellParams::RHO_DT2] = SC->parameters[CellParams::RHO];
-      SC->parameters[CellParams::RHOVX_DT2] = SC->parameters[CellParams::RHOVX];
-      SC->parameters[CellParams::RHOVY_DT2] = SC->parameters[CellParams::RHOVY];
-      SC->parameters[CellParams::RHOVZ_DT2] = SC->parameters[CellParams::RHOVZ];
+      SC->parameters[CellParams::RHOM_DT2] = SC->parameters[CellParams::RHOM];
+      SC->parameters[CellParams::RHOMVX_DT2] = SC->parameters[CellParams::RHOMVX];
+      SC->parameters[CellParams::RHOMVY_DT2] = SC->parameters[CellParams::RHOMVY];
+      SC->parameters[CellParams::RHOMVZ_DT2] = SC->parameters[CellParams::RHOMVZ];
+      SC->parameters[CellParams::RHOQ_DT2] = SC->parameters[CellParams::RHOQ];
       SC->parameters[CellParams::P_11_DT2] = SC->parameters[CellParams::P_11];
       SC->parameters[CellParams::P_22_DT2] = SC->parameters[CellParams::P_22];
       SC->parameters[CellParams::P_33_DT2] = SC->parameters[CellParams::P_33];

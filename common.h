@@ -60,6 +60,13 @@ void bailout(
 
 #define MASTER_RANK 0
 
+
+/* Maximum number of blocks in each dimension in velocity space. The
+   size of velocity space defined in cfg can at maximum be this large
+*/
+#define MAX_BLOCKS_PER_DIM 200
+
+
 /*! A namespace for storing indices into an array which contains 
  * neighbour list for each spatial cell. These indices refer to 
  * the CPU memory, i.e. the device does not use these.
@@ -112,6 +119,7 @@ namespace BlockParams {
  * field solver are optimised for this particular ordering.
  */
 namespace CellParams {
+#warning RHOMV not needed, switch to V?
    enum {
       XCRD,   /*!< x-coordinate of the bottom left corner.*/
       YCRD,   /*!< y-coordinate of the bottom left corner.*/
@@ -132,16 +140,22 @@ namespace CellParams {
       RHOVX,  /*!< x-component of number density times Vx. Calculated by Vlasov propagator, used to propagate BX,BY,BZ.*/
       RHOVY,  /*!< y-component of number density times Vy. Calculated by Vlasov propagator, used to propagate BX,BY,BZ.*/
       RHOVZ,  /*!< z-component of number density times Vz. Calculated by Vlasov propagator, used to propagate BX,BY,BZ.*/
+      RHOM,    /*!< Total mass density. Calculated by Vlasov propagator, used to propagate BX,BY,BZ.*/
+      RHOMVX,  /*!< x-component of mass density times Vx. Calculated by Vlasov propagator, used to propagate BX,BY,BZ.*/
+      RHOMVY,  /*!< y-component of mass density times Vy. Calculated by Vlasov propagator, used to propagate BX,BY,BZ.*/
+      RHOMVZ,  /*!< z-component of mass density times Vz. Calculated by Vlasov propagator, used to propagate BX,BY,BZ.*/
+      RHOQ,    /*!< Total charge density. Calculated by Vlasov propagator, used to propagate BX,BY,BZ.*/
       EX_DT2,    /*!< Intermediate step value for RK2 time stepping in field solver.*/
       EY_DT2,    /*!< Intermediate step value for RK2 time stepping in field solver.*/
       EZ_DT2,    /*!< Intermediate step value for RK2 time stepping in field solver.*/
       PERBX_DT2, /*!< Intermediate step value for PERBX for RK2 time stepping in field solver.*/
       PERBY_DT2, /*!< Intermediate step value for PERBY for RK2 time stepping in field solver.*/
       PERBZ_DT2, /*!< Intermediate step value for PERBZ for RK2 time stepping in field solver.*/
-      RHO_DT2,   /*!< Intermediate step value for RK2 time stepping in field solver. Computed from RHO_R and RHO_V*/
-      RHOVX_DT2, /*!< Intermediate step value for RK2 time stepping in field solver. Computed from RHOVX_R and RHOVX_V*/
-      RHOVY_DT2, /*!< Intermediate step value for RK2 time stepping in field solver. Computed from RHOVY_R and RHOVY_V*/
-      RHOVZ_DT2, /*!< Intermediate step value for RK2 time stepping in field solver. Computed from RHOVZ_R and RHOVZ_V*/
+      RHOM_DT2,    /*!< Total mass density. Calculated by Vlasov propagator, used to propagate BX,BY,BZ.*/
+      RHOMVX_DT2,  /*!< x-component of mass density times Vx. Calculated by Vlasov propagator, used to propagate BX,BY,BZ.*/
+      RHOMVY_DT2,  /*!< y-component of mass density times Vy. Calculated by Vlasov propagator, used to propagate BX,BY,BZ.*/
+      RHOMVZ_DT2,  /*!< z-component of mass density times Vz. Calculated by Vlasov propagator, used to propagate BX,BY,BZ.*/
+      RHOQ_DT2,    /*!< Total charge density. Calculated by Vlasov propagator, used to propagate BX,BY,BZ.*/
       BGBXVOL,   /*!< background magnetic field averaged over spatial cell.*/
       BGBYVOL,   /*!< background magnetic field averaged over spatial cell.*/
       BGBZVOL,   /*!< background magnetic field averaged over spatial cell.*/
@@ -190,14 +204,16 @@ namespace CellParams {
       EXGRADPE,         /*!< Electron pressure gradient term x.*/
       EYGRADPE,         /*!< Electron pressure gradient term y.*/
       EZGRADPE,         /*!< Electron pressure gradient term z.*/
-      RHO_R,     /*!< RHO after propagation in ordinary space*/
-      RHOVX_R,   /*!< RHOVX after propagation in ordinary space*/
-      RHOVY_R,   /*!< RHOVX after propagation in ordinary space*/
-      RHOVZ_R,   /*!< RHOVX after propagation in ordinary space*/
-      RHO_V,     /*!< RHO after propagation in velocity space*/
-      RHOVX_V,   /*!< RHOVX after propagation in velocity space*/
-      RHOVY_V,   /*!< RHOVX after propagation in velocity space*/
-      RHOVZ_V,   /*!< RHOVX after propagation in velocity space*/
+      RHOM_R,     /*!< RHO after propagation in ordinary space*/
+      RHOMVX_R,   /*!< RHOVX after propagation in ordinary space*/
+      RHOMVY_R,   /*!< RHOVX after propagation in ordinary space*/
+      RHOMVZ_R,   /*!< RHOVX after propagation in ordinary space*/
+      RHOQ_R,     /*!< RHO after propagation in ordinary space*/
+      RHOM_V,     /*!< RHO after propagation in velocity space*/
+      RHOMVX_V,   /*!< RHOVX after propagation in velocity space*/
+      RHOMVY_V,   /*!< RHOVX after propagation in velocity space*/
+      RHOMVZ_V,   /*!< RHOVX after propagation in velocity space*/
+      RHOQ_V,     /*!< RHO after propagation in velocity space*/
       P_11,     /*!< Pressure P_xx component, computed by Vlasov propagator. */
       P_22,     /*!< Pressure P_yy component, computed by Vlasov propagator. */
       P_33,     /*!< Pressure P_zz component, computed by Vlasov propagator. */
@@ -210,15 +226,12 @@ namespace CellParams {
       P_11_V,   /*!< P_xx component after propagation in velocity space */
       P_22_V,   /*!< P_yy component after propagation in velocity space */
       P_33_V,   /*!< P_zz component after propagation in velocity space */
-      RHOLOSSADJUST,      /*!< Counter for massloss from the destroying blocks in blockadjustment*/
-      RHOLOSSVELBOUNDARY, /*!< Counter for massloss through outflow boundaries in velocity space*/
       MAXVDT,             /*!< maximum timestep allowed in velocity space for this cell, 
                            * this is the max allowed timestep over all particle species.*/
       MAXRDT,             /*!< maximum timestep allowed in ordinary space for this cell,
                            * this is the max allowed timestep over all particle species.*/
       MAXFDT,             /*!< maximum timestep allowed in ordinary space by fieldsolver for this cell**/
       LBWEIGHTCOUNTER,    /*!< Counter for storing compute time weights needed by the load balancing**/
-      ACCSUBCYCLES,        /*!< number of subcyles for each cell*/
       ISCELLSAVINGF,      /*!< Value telling whether a cell is saving its distribution function when partial f data is written out. */
       PHI,        /*!< Electrostatic potential.*/
       PHI_TMP,    /*!< Temporary electrostatic potential.*/
@@ -240,9 +253,12 @@ namespace CellParams {
  */
 namespace fieldsolver {
    enum {
-      drhodx,    /*!< Derivative of volume-averaged number density to x-direction. */
-      drhody,    /*!< Derivative of volume-averaged number density to y-direction. */
-      drhodz,    /*!< Derivative of volume-averaged number density to z-direction. */
+      drhomdx,    /*!< Derivative of volume-averaged mass density to x-direction. */
+      drhomdy,    /*!< Derivative of volume-averaged mass density to y-direction. */
+      drhomdz,    /*!< Derivative of volume-averaged mass density to z-direction. */
+      drhoqdx,    /*!< Derivative of volume-averaged charge density to x-direction. */
+      drhoqdy,    /*!< Derivative of volume-averaged charge density to y-direction. */
+      drhoqdz,    /*!< Derivative of volume-averaged charge density to z-direction. */
       dBGBxdy,     /*!< Derivative of face-averaged Bx to y-direction. */
       dBGBxdz,     /*!< Derivative of face-averaged Bx to z-direction. */
       dBGBydx,     /*!< Derivative of face-averaged By to x-direction. */
@@ -365,6 +381,16 @@ struct globalflags {
    static int bailingOut; /*!< Global flag raised to true if a run bailout (write restart if requested/set and stop the simulation peacefully) is needed. */
    static bool writeRestart; /*!< Global flag raised to true if a restart writing is needed (without bailout). NOTE: used only by MASTER_RANK in vlasiator.cpp. */
 };
+
+/*!
+ * Name space for flags going into the project hook function.
+ */
+namespace hook {
+   enum {
+      END_OF_TIME_STEP
+   };
+}
+
 
 // Natural constants
 namespace physicalconstants {
