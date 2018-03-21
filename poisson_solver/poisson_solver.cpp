@@ -96,7 +96,6 @@ namespace poisson {
             dccrg::Dccrg<spatial_cell::SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
             const std::vector<CellID>& cells) {
 
-      phiprof::start("Background Field");
 
       if (Poisson::clearPotential == true || Parameters::tstep == 0 || Parameters::meshRepartitioned == true) {
          #pragma omp parallel for
@@ -127,7 +126,6 @@ namespace poisson {
             cell->parameters[CellParams::EZVOL] = cell->parameters[CellParams::BGEZVOL];
          }
       }
-      phiprof::stop("Background Field",cells.size(),"Spatial Cells");
       return true;
    }
 
@@ -166,7 +164,6 @@ namespace poisson {
     * @param cells List of spatial cells.
     * @return If true, charge densities were successfully calculated.*/
    bool PoissonSolver::calculateChargeDensity(spatial_cell::SpatialCell* cell) {
-      phiprof::start("Charge Density");
       bool success = true;
 
       Real rho_q = 0.0;
@@ -231,7 +228,6 @@ namespace poisson {
       for (int popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID)
          phaseSpaceCells += cell->get_velocity_blocks(popID).size()*WID3;
 
-      phiprof::stop("Charge Density",phaseSpaceCells,"Phase-space cells");
       return success;
    }
 
@@ -325,7 +321,6 @@ namespace poisson {
    }*/
    
    Real PoissonSolver::maxError2D(dccrg::Dccrg<spatial_cell::SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid) {
-      phiprof::start("Evaluate Error");
 
       // DEBUG: Make sure values are up to date
       SpatialCell::set_mpi_transfer_type(spatial_cell::Transfer::CELL_RHOQ_TOT,false);
@@ -395,7 +390,6 @@ namespace poisson {
 
       delete [] maxError; maxError = NULL;
 
-      phiprof::stop("Evaluate Error",cells.size(),"Spatial Cells");
 
       return globalMaxError;
    }
@@ -477,15 +471,12 @@ namespace poisson {
    }
 
    bool solve(dccrg::Dccrg<spatial_cell::SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid) {
-      phiprof::start("Poisson Solver (Total)");
       bool success = true;
       
       // If mesh partitioning has changed, recalculate spatial 
       // cell parameters pointer cache:
       if (Parameters::meshRepartitioned == true) {
-         phiprof::start("Cache Cell Parameters");
          Poisson::cacheCellParameters(mpiGrid,getLocalCells());
-         phiprof::stop("Cache Cell Parameters");
       }
 
       // Solve Poisson equation
@@ -503,7 +494,6 @@ namespace poisson {
       //   if (Poisson::solver->calculateElectrostaticField(mpiGrid) == false) success = false;
       //}
       
-      phiprof::stop("Poisson Solver (Total)");
       return success;
    }
 

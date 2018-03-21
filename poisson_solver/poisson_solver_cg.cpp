@@ -87,7 +87,6 @@ namespace poisson {
    /** Calculate the value of alpha parameter.
     * @return If true, all processes have the same value of alpha in PoissonSolverCG::alphaGlobal.*/
    bool PoissonSolverCG::calculateAlpha() {
-      phiprof::start("calculate alpha");
       Real t_start = 0;
       if (Parameters::prepareForRebalance == true) t_start = MPI_Wtime();
       
@@ -128,11 +127,9 @@ namespace poisson {
          }
       }
 
-      phiprof::stop("calculate alpha",bndryCellPointers.size()+innerCellPointers.size(),"Spatial Cells");
 
       // Reduce sums to master process:
       #warning TEST if Allreduce is faster here
-      phiprof::start("MPI (Alpha)");
       MPI_Reduce(sums,&(globalVariables[cgglobal::R_T_R]),2,MPI_Type<Real>(),MPI_SUM,0,MPI_COMM_WORLD);
 
       // Calculate alpha and broadcast to all processes:
@@ -140,7 +137,6 @@ namespace poisson {
               = globalVariables[cgglobal::R_T_R] 
               /(globalVariables[cgglobal::P_T_A_P] + 100*numeric_limits<Real>::min());
       MPI_Bcast(globalVariables,3,MPI_Type<Real>(),0,MPI_COMM_WORLD);
-      phiprof::stop("MPI (Alpha)");
       return true;
    }
 
@@ -394,7 +390,6 @@ namespace poisson {
 
       // If mesh partitioning has changed, recalculate pointer caches
       if (Parameters::meshRepartitioned == true) {
-         phiprof::start("Pointer Caching");
          if (Poisson::is2D == true) {
             cachePointers2D(mpiGrid,mpiGrid.get_local_cells_on_process_boundary(POISSON_NEIGHBORHOOD_ID),bndryCellPointers);
             cachePointers2D(mpiGrid,mpiGrid.get_local_cells_not_on_process_boundary(POISSON_NEIGHBORHOOD_ID),innerCellPointers);
@@ -402,7 +397,6 @@ namespace poisson {
             //cachePointers3D(mpiGrid,mpiGrid.get_local_cells_on_process_boundary(POISSON_NEIGHBORHOOD_ID),bndryCellPointers);
             //cachePointers3D(mpiGrid,mpiGrid.get_local_cells_not_on_process_boundary(POISSON_NEIGHBORHOOD_ID),innerCellPointers);
          }
-         phiprof::stop("Pointer Caching");
       }
 
       // Calculate charge density and sync
@@ -412,7 +406,6 @@ namespace poisson {
       //mpiGrid.start_remote_neighbor_copy_updates(POISSON_NEIGHBORHOOD_ID);
       //for (size_t c=0; c<innerCellPointers.size(); ++c) calculateChargeDensity(innerCellPointers[c].cell);
       
-      phiprof::start("Charge Density");
       #pragma omp parallel
       {
          const int tid = omp_get_thread_num();
@@ -431,11 +424,8 @@ namespace poisson {
             calculateChargeDensitySingle(innerCellPointers[c].cell);
          }
       }
-      phiprof::stop("Charge Density");
 
-      phiprof::start("MPI (RHOQ)");
       mpiGrid.wait_remote_neighbor_copy_updates(POISSON_NEIGHBORHOOD_ID);
-      phiprof::stop("MPI (RHOQ)");
 
       // Initialize
       if (startIteration(mpiGrid) == false) {
@@ -512,7 +502,6 @@ namespace poisson {
    /** Calculate the value of alpha for this iteration.
     * @return If true, CG solver is ready to iterate.*/
    bool PoissonSolverCG::startIteration(std::vector<CellCache3D<cgvar::SIZE> >& cells) {
-      phiprof::start("start iteration");
 
       #pragma omp parallel for
       for (size_t c=0; c<cells.size(); ++c) {
@@ -530,13 +519,11 @@ namespace poisson {
          const Real P0 = cells[c].variables[cgvar::R];
          cells[c].parameters[0][CellParams::PHI_TMP] = P0;
       }
-      phiprof::stop("start iteration",cells.size(),"Spatial Cells");
 
       return true;
    }
    
    bool PoissonSolverCG::update_p(dccrg::Dccrg<spatial_cell::SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid) {
-      phiprof::start("R transpose * R");
       
       Real R_T_R = 0;
       Real t_start = 0;
@@ -560,18 +547,14 @@ namespace poisson {
       const size_t N_cells = bndryCellPointers.size()+innerCellPointers.size();
 
       if (Parameters::prepareForRebalance == true) t_total = (MPI_Wtime() - t_start);
-      phiprof::stop("R transpose * R",N_cells,"Spatial Cells");
 
       // Reduce value to master, calculate beta parameter and broadcast it to all processes:
-      phiprof::start("MPI (R transp R)");
       Real global_R_T_R;
       MPI_Reduce(&R_T_R,&global_R_T_R,1,MPI_Type<Real>(),MPI_SUM,0,MPI_COMM_WORLD);
       globalVariables[cgglobal::BETA] = global_R_T_R / (globalVariables[cgglobal::R_T_R] + 100*numeric_limits<Real>::min());
       globalVariables[cgglobal::R_T_R] = global_R_T_R;
       MPI_Bcast(globalVariables,cgglobal::SIZE,MPI_Type<Real>(),0,MPI_COMM_WORLD);
-      phiprof::stop("MPI (R transp R)");
 
-      phiprof::start("update P");
       t_start = 0;
       if (Parameters::prepareForRebalance == true) t_start = MPI_Wtime();
 
@@ -621,12 +604,9 @@ namespace poisson {
             }            
          }
       }
-      phiprof::stop("update P",innerCellPointers.size()+bndryCellPointers.size(),"Spatial Cells");
 
       // Wait for MPI to complete:
-      phiprof::start("MPI (update P)");
       mpiGrid.wait_remote_neighbor_copy_updates(POISSON_NEIGHBORHOOD_ID);
-      phiprof::stop("MPI (update P)");
 
       return true;
    }
@@ -635,7 +615,6 @@ namespace poisson {
     * 
     * @return */
    bool PoissonSolverCG::update_x_r() {
-      phiprof::start("update x and r");
       
       Real t_start = 0;
       if (Parameters::prepareForRebalance == true) t_start = MPI_Wtime();
@@ -690,11 +669,8 @@ namespace poisson {
          }
       }
       
-      phiprof::stop("update x and r",N_cells,"Spatial Cells");
 
-      phiprof::start("MPI (x and r)");
       MPI_Allreduce(&R_max,&(globalVariables[cgglobal::R_MAX]),1,MPI_Type<Real>(),MPI_MAX,MPI_COMM_WORLD);
-      phiprof::stop("MPI (x and r)");
 
       return true;
    }

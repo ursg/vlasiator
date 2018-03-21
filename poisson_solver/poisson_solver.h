@@ -140,7 +140,6 @@ namespace poisson {
    
    template<unsigned int VARS> inline
    bool PoissonSolver::calculateElectrostaticField2D(const std::vector<poisson::CellCache3D<VARS> >& cells) {
-      phiprof::start("Electrostatic E");
 
       #pragma omp parallel for
       for (size_t c=0; c<cells.size(); ++c) {
@@ -156,13 +155,11 @@ namespace poisson {
          cells[c].parameters[0][CellParams::EYVOL] -= (phi_12-phi_10)/DY;
       }
 
-      phiprof::stop("Electrostatic E",cells.size(),"Spatial Cells");
       return true;
    }
    
    template<unsigned int VARS> inline
    bool PoissonSolver::calculateElectrostaticField3D(const std::vector<poisson::CellCache3D<VARS> >& cells) {
-      phiprof::start("Electrostatic E");
 
       #pragma omp parallel for
       for (size_t c=0; c<cells.size(); ++c) {
@@ -182,7 +179,6 @@ namespace poisson {
          cells[c].parameters[0][CellParams::EZVOL] -= (phi_112-phi_110)/DZ;
       }
 
-      phiprof::stop("Electrostatic E",cells.size(),"Spatial Cells");
       return true;
    }
 
@@ -195,7 +191,6 @@ namespace poisson {
     * the same at all MPI processes.*/
    template<unsigned int VARS> inline
    Real PoissonSolver::error(std::vector<poisson::CellCache3D<VARS> >& cells) {
-      phiprof::start("error evaluation");
       Real maxError = -std::numeric_limits<Real>::max();
       Real* threadMaxError = new Real[omp_get_max_threads()];
       
@@ -237,7 +232,6 @@ namespace poisson {
       // Reduce the maximum error to all processes
       Real globalMaxError;
       MPI_Allreduce(&maxError,&globalMaxError,1,MPI_Type<Real>(),MPI_MAX,MPI_COMM_WORLD);
-      phiprof::stop("error evaluation",cells.size(),"Spatial Cells");
 
       return globalMaxError;
    }

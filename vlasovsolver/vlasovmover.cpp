@@ -30,7 +30,6 @@
 #endif
 #include <zoltan.h>
 #include <dccrg.hpp>
-#include <phiprof.hpp>
 
 #include "../spatial_cell.hpp"
 #include "../vlasovmover.h"
@@ -78,11 +77,8 @@ void calculateSpatialTranslation(
 
     // ------------- SLICE - map dist function in Z --------------- //
    if(P::zcells_ini > 1 ){
-      trans_timer=phiprof::initializeTimer("transfer-stencil-data-z","MPI");
-      phiprof::start(trans_timer);
       SpatialCell::set_mpi_transfer_type(Transfer::VEL_BLOCK_DATA);
       mpiGrid.start_remote_neighbor_copy_updates(VLASOV_SOLVER_Z_NEIGHBORHOOD_ID);
-      phiprof::stop(trans_timer);
       
       // generate target grid in the temporary arrays, same size as
       // original one. We only need to create these in target cells
@@ -93,11 +89,8 @@ void calculateSpatialTranslation(
          localTargetGridGenerated=true;
       }
 
-      phiprof::start(trans_timer);
       mpiGrid.wait_remote_neighbor_copy_update_receives(VLASOV_SOLVER_Z_NEIGHBORHOOD_ID);
-      phiprof::stop(trans_timer);
       
-      phiprof::start("compute-mapping-z");
       #pragma omp parallel
       {
          const int tid = omp_get_thread_num();
@@ -114,17 +107,11 @@ void calculateSpatialTranslation(
             }
          }
       }
-      phiprof::stop("compute-mapping-z");
 
-      phiprof::start(trans_timer);
       mpiGrid.wait_remote_neighbor_copy_update_sends();
-      phiprof::stop(trans_timer);
 
-      trans_timer=phiprof::initializeTimer("update_remote-z","MPI");
-      phiprof::start("update_remote-z");
       update_remote_mapping_contribution(mpiGrid, 2,+1,popID);
       update_remote_mapping_contribution(mpiGrid, 2,-1,popID);
-      phiprof::stop("update_remote-z");
 
       clearTargetGrid(mpiGrid,remoteTargetCellsz);
       swapTargetSourceGrid(mpiGrid, local_target_cells,popID);
@@ -133,11 +120,8 @@ void calculateSpatialTranslation(
 
    // ------------- SLICE - map dist function in X --------------- //
    if(P::xcells_ini > 1 ){
-      trans_timer=phiprof::initializeTimer("transfer-stencil-data-x","MPI");
-      phiprof::start(trans_timer);
       SpatialCell::set_mpi_transfer_type(Transfer::VEL_BLOCK_DATA);
       mpiGrid.start_remote_neighbor_copy_updates(VLASOV_SOLVER_X_NEIGHBORHOOD_ID);
-      phiprof::stop(trans_timer);
       
       createTargetGrid(mpiGrid,remoteTargetCellsx,popID);
        if(!localTargetGridGenerated){ 
@@ -145,11 +129,8 @@ void calculateSpatialTranslation(
          localTargetGridGenerated=true;
       }
 
-      phiprof::start(trans_timer);
       mpiGrid.wait_remote_neighbor_copy_update_receives(VLASOV_SOLVER_X_NEIGHBORHOOD_ID);
-      phiprof::stop(trans_timer);
 
-      phiprof::start("compute-mapping-x");
       #pragma omp parallel
       {
          const int tid = omp_get_thread_num();
@@ -166,17 +147,11 @@ void calculateSpatialTranslation(
             }
          }
       }
-      phiprof::stop("compute-mapping-x");
 
-      phiprof::start(trans_timer);
       mpiGrid.wait_remote_neighbor_copy_update_sends();
-      phiprof::stop(trans_timer);
 
-      trans_timer=phiprof::initializeTimer("update_remote-x","MPI");
-      phiprof::start("update_remote-x");
       update_remote_mapping_contribution(mpiGrid, 0,+1,popID);
       update_remote_mapping_contribution(mpiGrid, 0,-1,popID);
-      phiprof::stop("update_remote-x");
       clearTargetGrid(mpiGrid,remoteTargetCellsx);
       swapTargetSourceGrid(mpiGrid, local_target_cells,popID);
       zeroTargetGrid(mpiGrid, local_target_cells);
@@ -184,11 +159,8 @@ void calculateSpatialTranslation(
    
    // ------------- SLICE - map dist function in Y --------------- //
    if(P::ycells_ini > 1 ){
-      trans_timer=phiprof::initializeTimer("transfer-stencil-data-y","MPI");
-      phiprof::start(trans_timer);
       SpatialCell::set_mpi_transfer_type(Transfer::VEL_BLOCK_DATA);
       mpiGrid.start_remote_neighbor_copy_updates(VLASOV_SOLVER_Y_NEIGHBORHOOD_ID);
-      phiprof::stop(trans_timer);
       
       createTargetGrid(mpiGrid,remoteTargetCellsy,popID);
       if(!localTargetGridGenerated){ 
@@ -196,11 +168,8 @@ void calculateSpatialTranslation(
          localTargetGridGenerated=true;
       }
       
-      phiprof::start(trans_timer);
       mpiGrid.wait_remote_neighbor_copy_update_receives(VLASOV_SOLVER_Y_NEIGHBORHOOD_ID);
-      phiprof::stop(trans_timer);
 
-      phiprof::start("compute-mapping-y");
       #pragma omp parallel
       {
          const int tid = omp_get_thread_num();
@@ -217,17 +186,11 @@ void calculateSpatialTranslation(
             }
          }
       }
-      phiprof::stop("compute-mapping-y");
 
-      phiprof::start(trans_timer);
       mpiGrid.wait_remote_neighbor_copy_update_sends();
-      phiprof::stop(trans_timer);
       
-      trans_timer=phiprof::initializeTimer("update_remote-y","MPI");
-      phiprof::start("update_remote-y");
       update_remote_mapping_contribution(mpiGrid, 1,+1,popID);
       update_remote_mapping_contribution(mpiGrid, 1,-1,popID);
-      phiprof::stop("update_remote-y");
       clearTargetGrid(mpiGrid,remoteTargetCellsy);
       swapTargetSourceGrid(mpiGrid, local_target_cells,popID);
    }
@@ -250,7 +213,6 @@ void calculateSpatialTranslation(
         creal dt) {
    typedef Parameters P;
    
-   phiprof::start("semilag-trans");
 
    const vector<CellID>& localCells = getLocalCells();
    vector<CellID> remoteTargetCellsx;
@@ -263,7 +225,6 @@ void calculateSpatialTranslation(
    // In both cases go to the end of this function and calculate the moments.
    if (dt == 0.0) goto momentCalculation;
    
-    phiprof::start("compute_cell_lists");
     remoteTargetCellsx = mpiGrid.get_remote_cells_on_process_boundary(VLASOV_SOLVER_TARGET_X_NEIGHBORHOOD_ID);
     remoteTargetCellsy = mpiGrid.get_remote_cells_on_process_boundary(VLASOV_SOLVER_TARGET_Y_NEIGHBORHOOD_ID);
     remoteTargetCellsz = mpiGrid.get_remote_cells_on_process_boundary(VLASOV_SOLVER_TARGET_Z_NEIGHBORHOOD_ID);
@@ -283,17 +244,14 @@ void calculateSpatialTranslation(
          local_target_cells.push_back(localCells[c]);
       }
    }
-   phiprof::stop("compute_cell_lists");
 
    // Translate all particle species
    for (int popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID) {
       string profName = "translate "+getObjectWrapper().particleSpecies[popID].name;
-      phiprof::start(profName);
       SpatialCell::setCommunicatedSpecies(popID);
       calculateSpatialTranslation(mpiGrid,localCells,local_propagated_cells,
                                   local_target_cells,remoteTargetCellsx,remoteTargetCellsy,
                                   remoteTargetCellsz,dt,popID);
-      phiprof::stop(profName);
    }
 
    // Mapping complete, update moments and maximum dt limits //
@@ -305,7 +263,6 @@ momentCalculation:
       if (mpiGrid[localCells[c]]->parameters[CellParams::MAXRDT] < minDT) 
          minDT = mpiGrid[localCells[c]]->parameters[CellParams::MAXRDT];
    }
-   phiprof::stop("semilag-trans");
 }
 
 /*
@@ -372,9 +329,7 @@ void calculateAcceleration(const int& popID,const int& globalMaxSubcycles,const 
       #endif
          
       uint map_order=rndInt%3;
-      phiprof::start("cell-semilag-acc");
       cpu_accelerate_cell(mpiGrid[cellID],popID,map_order,subcycleDt);
-      phiprof::stop("cell-semilag-acc");
    }
 
    //global adjust after each subcycle to keep number of blocks managable. Even the ones not
@@ -406,7 +361,6 @@ void calculateAcceleration(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& 
         adjustVelocityBlocks(mpiGrid, cells, true, popID);
       goto momentCalculation;
    }
-   phiprof::start("semilag-acc");
     
    
    // Accelerate all particle species
@@ -460,7 +414,6 @@ void calculateAcceleration(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& 
        adjustVelocityBlocks(mpiGrid, cells, true, popID);
     } // for-loop over particle species
 
-    phiprof::stop("semilag-acc");
 
    // Recalculate "_V" velocity moments
 momentCalculation:
@@ -513,7 +466,6 @@ void calculateInterpolatedVelocityMoments(
 
 void calculateInitialVelocityMoments(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid) {
    const vector<CellID>& cells = getLocalCells();
-   phiprof::start("Calculate moments");
 
    // Iterate through all local cells (incl. system boundary cells):
    #pragma omp parallel for
@@ -533,5 +485,4 @@ void calculateInitialVelocityMoments(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_G
       SC->parameters[CellParams::P_22_DT2] = SC->parameters[CellParams::P_22];
       SC->parameters[CellParams::P_33_DT2] = SC->parameters[CellParams::P_33];
    } // for-loop over spatial cells
-   phiprof::stop("Calculate moments"); 
 }

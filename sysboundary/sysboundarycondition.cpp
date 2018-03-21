@@ -877,9 +877,7 @@ namespace SBC {
    std::vector<CellID> & SysBoundaryCondition::getAllClosestNonsysboundaryCells(
       const CellID& cellID
    ) {
-      phiprof::start("getAllClosestNonsysboundaryCells");
       std::vector<CellID> & closestCells = allClosestNonsysboundaryCells.at(cellID);
-      phiprof::stop("getAllClosestNonsysboundaryCells");
       return closestCells;
    }
    
@@ -890,9 +888,7 @@ namespace SBC {
    std::array<SpatialCell*,27> & SysBoundaryCondition::getFlowtoCells(
       const CellID& cellID
    ) {
-      phiprof::start("getFlowtoCells");
       std::array<SpatialCell*,27> & flowtoCells = allFlowtoCells.at(cellID);
-      phiprof::stop("getFlowtoCells");
       return flowtoCells;
    }
    
@@ -901,7 +897,6 @@ namespace SBC {
       const vmesh::GlobalID blockGID,
       const int& popID
    ) {
-      phiprof::start("getFlowtoCellsBlock");
       std::array<Realf*,27> flowtoCellsBlock;
       flowtoCellsBlock.fill(NULL);
       for (uint i=0; i<27; i++) {
@@ -909,7 +904,6 @@ namespace SBC {
             flowtoCellsBlock.at(i) = flowtoCells.at(i)->get_data(flowtoCells.at(i)->get_velocity_block_local_id(blockGID,popID), popID);
          }
       }
-      phiprof::stop("getFlowtoCellsBlock");
       return flowtoCellsBlock;
    }
    

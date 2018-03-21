@@ -35,7 +35,6 @@ using namespace std;
 void calculateVolumeAveragedFields(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
                                    std::vector<fs_cache::CellCache>& cache,
                                    const std::vector<uint16_t>& cells) {
-   phiprof::start("Calculate volume averaged fields");
 
    namespace fs = fieldsolver;
    namespace cp = CellParams;
@@ -168,7 +167,6 @@ void calculateVolumeAveragedFields(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geo
       }
    }
 
-   phiprof::stop("Calculate volume averaged fields",cache.size(),"Spatial Cells");
 }
          
          

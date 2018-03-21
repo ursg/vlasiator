@@ -32,7 +32,6 @@
 #include <sys/stat.h>
 
 #include "ioread.h"
-#include "phiprof.hpp"
 #include "parameters.h"
 #include "logger.h"
 #include "vlsv_reader_parallel.h"
@@ -40,7 +39,6 @@
 #include "object_wrapper.h"
 
 using namespace std;
-using namespace phiprof;
 
 extern Logger logFile, diagnostic;
 
@@ -708,7 +706,6 @@ bool exec_readGrid(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
    MPI_Comm_rank(MPI_COMM_WORLD,&myRank);
    MPI_Comm_size(MPI_COMM_WORLD,&processes);
 
-   phiprof::start("readGrid");
 
    vlsv::ParallelReader file;
    MPI_Info mpiInfo = MPI_INFO_NULL;
@@ -754,7 +751,6 @@ bool exec_readGrid(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
    checkScalarParameter(file,"ycells_ini",P::ycells_ini,MASTER_RANK,MPI_COMM_WORLD);
    checkScalarParameter(file,"zcells_ini",P::zcells_ini,MASTER_RANK,MPI_COMM_WORLD);
 
-   phiprof::start("readDatalayout");
    if (success == true) success = readCellIds(file,fileCells,MASTER_RANK,MPI_COMM_WORLD);
 
    // Check that the cellID lists are identical in file and grid
@@ -855,10 +851,8 @@ bool exec_readGrid(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
    //for(uint64_t i=localCellStartOffset; i<localCellStartOffset+localCells; ++i) {
    //  localBlocks += nBlocks[i];
    //}
-   phiprof::stop("readDatalayout");
 
    //todo, check file datatype, and do not just use double
-   phiprof::start("readCellParameters");
    if(success) { success=readCellParamsVariable(file,fileCells,localCellStartOffset,localCells,"perturbed_B",CellParams::PERBX,3,mpiGrid); }
 // Backround B has to be set, there are also the derivatives that should be written/read if we wanted to only read in background field
    if(success) { success=readCellParamsVariable(file,fileCells,localCellStartOffset,localCells,"moments",CellParams::RHO,4,mpiGrid); }
@@ -876,16 +870,12 @@ bool exec_readGrid(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
    if(success) { success=readCellParamsVariable(file,fileCells,localCellStartOffset,localCells,"rho_loss_adjust",CellParams::RHOLOSSADJUST,1,mpiGrid); }
    if(success) { success=readCellParamsVariable(file,fileCells,localCellStartOffset,localCells,"rho_loss_velocity_boundary",CellParams::RHOLOSSVELBOUNDARY,1,mpiGrid); }
 // Backround B has to be set, there are also the derivatives that should be written/read if we wanted to only read in background field
-   phiprof::stop("readCellParameters");
 
-   phiprof::start("readBlockData");
    if (success == true) {
       success = readBlockData(file,meshName,fileCells,localCellStartOffset,localCells,mpiGrid); 
    }
-   phiprof::stop("readBlockData");
 
    success = file.close();
-   phiprof::stop("readGrid");
 
    exitOnError(success,"(RESTART) Other failure",MPI_COMM_WORLD);
    return success;

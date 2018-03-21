@@ -456,7 +456,6 @@ namespace SBC {
       const CellID& cellID,
       const int& popID
    ) {
-//      phiprof::start("vlasovBoundaryCondition (Outflow)");
       
       SpatialCell* cell = mpiGrid[cellID];
       creal* const cellParams = cell->parameters;
@@ -497,7 +496,6 @@ namespace SBC {
          }
       }
       
-//      phiprof::stop("vlasovBoundaryCondition (Outflow)");
    }
    
    void Outflow::getFaces(bool* faces) {

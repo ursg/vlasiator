@@ -113,9 +113,7 @@ bool initializeFieldPropagator(
    const vector<uint64_t>& localCells = getLocalCells();
    
    // Force recalculate of cell caches
-   phiprof::start("Calculate Caches");
    fs_cache::calculateCache(mpiGrid,localCells);
-   phiprof::stop("Calculate Caches",localCells.size(),"Spatial Cells");
 
    // Checking that spatial cells are cubic, otherwise field solver is incorrect (cf. derivatives in E, Hall term)
    if((abs((P::dx_ini-P::dy_ini)/P::dx_ini) > 0.001) ||
@@ -279,9 +277,7 @@ bool propagateFields(
    bool hallTermCommunicateDerivatives = true;
 
    if (Parameters::meshRepartitioned == true) {
-      phiprof::start("Calculate Caches");
       fs_cache::calculateCache(mpiGrid,localCells);
-      phiprof::stop("Calculate Caches");
    }
 
    for (size_t cell=0; cell<localCells.size(); ++cell) {
@@ -364,7 +360,6 @@ bool propagateFields(
          }
          calculateUpwindedElectricFieldSimple(mpiGrid, sysBoundaries, localCells, RK_ORDER2_STEP2);
          
-         phiprof::start("FS subcycle stuff");
          subcycleT += subcycleDt; 
          subcycleCount++;
 
@@ -375,8 +370,6 @@ bool propagateFields(
                std::cerr << "subcycleT > targetT, should not happen! (values: subcycleT " << subcycleT << ", subcycleDt " << subcycleDt << ", targetT " << targetT << ")" << std::endl;
             }
 
-            // Make sure the phiprof group is closed when leaving the loop
-            phiprof::stop("FS subcycle stuff");
 
             break;
          }
@@ -395,9 +388,7 @@ bool propagateFields(
                dtMaxLocal=min(dtMaxLocal, cell->parameters[CellParams::MAXFDT]);
             }
          }
-         phiprof::start("MPI_Allreduce");
          MPI_Allreduce(&(dtMaxLocal), &(dtMaxGlobal), 1, MPI_Type<Real>(), MPI_MIN, MPI_COMM_WORLD);
-         phiprof::stop("MPI_Allreduce");
          
          //reduce dt if it is too high
          if( subcycleDt > dtMaxGlobal * P::fieldSolverMaxCFL ) {
@@ -420,7 +411,6 @@ bool propagateFields(
             }
          }
          
-         phiprof::stop("FS subcycle stuff");
       }
       
       

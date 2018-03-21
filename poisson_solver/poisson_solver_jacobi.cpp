@@ -111,7 +111,6 @@ namespace poisson {
 
    bool PoissonSolverJacobi::solve(dccrg::Dccrg<spatial_cell::SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid) {
       bool success = true;
-      phiprof::start("Poisson Solver");
       
       // Update charge density
       SpatialCell::set_mpi_transfer_type(Transfer::CELL_RHOQ_TOT,false);
@@ -126,7 +125,6 @@ namespace poisson {
          break;
       } while (true);
 
-      phiprof::stop("Poisson Solver");
 
       return success;
    }

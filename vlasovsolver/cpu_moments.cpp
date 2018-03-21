@@ -20,7 +20,6 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
-#include <phiprof.hpp>
 #include "cpu_moments.h"
 #include "../vlasovmover.h"
 #include "../object_wrapper.h"
@@ -137,7 +136,6 @@ void calculateMoments_R_maxdt(
         const std::vector<CellID>& cells,
         const bool& computeSecond) {
  
-    phiprof::start("compute-moments-n-maxdt");
     creal HALF = 0.5;
 
     for (int popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID) {
@@ -229,7 +227,6 @@ void calculateMoments_R_maxdt(
 
    // Compute second moments only if requested.
    if (computeSecond == false) {
-      phiprof::stop("compute-moments-n-maxdt");
       return;
    }
 
@@ -268,7 +265,6 @@ void calculateMoments_R_maxdt(
       } // for-loop over spatial cells
    } // for-loop over particle species
 
-   phiprof::stop("compute-moments-n-maxdt");
 }
 
 /** Calculate zeroth, first, and (possibly) second bulk velocity moments for the 
@@ -284,7 +280,6 @@ void calculateMoments_V(
         const std::vector<CellID>& cells,
         const bool& computeSecond) {
  
-   phiprof::start("Compute _V moments");
 
    // Loop over all particle species
    for (int popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID) {
@@ -332,7 +327,6 @@ void calculateMoments_V(
 
    // Compute second moments only if requested
    if (computeSecond == false) {
-      phiprof::stop("Compute _V moments");
       return;
    }
 
@@ -372,5 +366,4 @@ void calculateMoments_V(
       } // for-loop over spatial cells
    } // for-loop over particle species
 
-   phiprof::stop("Compute _V moments");
 }

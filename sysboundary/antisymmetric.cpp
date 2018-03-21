@@ -257,9 +257,7 @@ namespace SBC {
    ) {
       //cerr << "AS vlasovBoundaryCondition cell " << cellID << " called " << endl;
       
-//      phiprof::start("vlasovBoundaryCondition (Antisymmetric)");
 //      vlasovBoundaryCopyFromTheClosestNbr(mpiGrid,cellID,popID);
-//      phiprof::stop("vlasovBoundaryCondition (Antisymmetric)");
 
       dccrg::Types<3>::indices_t indices = mpiGrid.mapping.get_indices(cellID);      
       if (indices[1] == 1 || indices[1] == Parameters::ycells_ini-2) {

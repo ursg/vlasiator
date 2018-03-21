@@ -72,7 +72,6 @@ namespace DRO {
                                   const std::vector<CellID>& cells,
                                   const std::string& meshName,
                                   vlsv::Writer& vlsvWriter) {
-      phiprof::start("SpeciesMoments");
       bool success = true;
       
       Real* bufferRho   = new Real[cells.size()];
@@ -125,7 +124,6 @@ namespace DRO {
       delete [] bufferRhoV; bufferRhoV = NULL;
       delete [] blocks; blocks = NULL;
 
-      phiprof::stop("SpeciesMoments",N_cells,"Phase-Space Cells");
       return success;
    }
    

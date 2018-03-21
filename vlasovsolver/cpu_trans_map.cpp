@@ -89,7 +89,6 @@ void createTargetGrid(
         const vector<CellID>& cells,
         const int& popID) {
 
-   phiprof::start("create-target-grid");
     #pragma omp parallel for
     for (size_t c=0; c<cells.size(); ++c) {
       Real t_start = 0.0;
@@ -121,7 +120,6 @@ void createTargetGrid(
       if (Parameters::prepareForRebalance == true) 
          spatial_cell->get_cell_parameters()[CellParams::LBWEIGHTCOUNTER] += (MPI_Wtime()-t_start);
    }
-   phiprof::stop("create-target-grid");
 }
 
 /** Clear temporary target grid for all given cells.
@@ -131,14 +129,12 @@ void clearTargetGrid(
         dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
         const vector<CellID>& cells) {
 
-    phiprof::start("clear-target-grid");
     #pragma omp parallel for
     for (size_t c=0; c<cells.size(); ++c) {
         SpatialCell *spatial_cell = mpiGrid[cells[c]];
         spatial_cell->get_velocity_mesh_temporary().clear();
         spatial_cell->get_velocity_blocks_temporary().clear();
     }
-    phiprof::stop("clear-target-grid");
 }
 
 /** Set all values in the temporary target grid to zero (0.0) for all given spatial cells.
@@ -148,7 +144,6 @@ void zeroTargetGrid(
         dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
         const vector<CellID>& cells) {
     
-    phiprof::start("zero-target-grid");      
     #pragma omp  parallel for
     for (size_t c=0; c<cells.size(); ++c) {
         SpatialCell *spatial_cell = mpiGrid[cells[c]];
@@ -157,7 +152,6 @@ void zeroTargetGrid(
             blockContainer.getData()[cell] = 0;
         }
     }
-    phiprof::stop("zero-target-grid");
 }
 
 /** Swap temporary target grid and normal grid. This is cheap as values are not copied.
@@ -169,14 +163,12 @@ void swapTargetSourceGrid(
         const vector<CellID>& cells,
         const int& popID) {
    
-    phiprof::start("swap-target-grid");
     for (size_t c=0; c<cells.size(); ++c) {
         SpatialCell* spatial_cell = mpiGrid[cells[c]];
         spatial_cell->swap(spatial_cell->get_velocity_mesh_temporary(),
                            spatial_cell->get_velocity_blocks_temporary(),
                            popID);
     }
-    phiprof::stop("swap-target-grid");
 }
 
 /*

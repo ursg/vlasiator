@@ -219,7 +219,7 @@ help:
 allclean: clean cleantools
 d: data
 data:
-	rm -rf phiprof*txt restart*vlsv grid*vlsv diagnostic.txt logfile.txt
+	rm -rf restart*vlsv grid*vlsv diagnostic.txt logfile.txt
 
 c: clean
 clean: data

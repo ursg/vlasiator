@@ -207,7 +207,6 @@ namespace SBC {
       const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
       const CellID& cellID
    ) {
-      phiprof::start("Ionosphere::fieldSolverGetNormalDirection");
       std::array<Real, 3> normalDirection{{ 0.0, 0.0, 0.0 }};
       
       static creal DIAG2 = 1.0 / sqrt(2.0);
@@ -475,7 +474,6 @@ namespace SBC {
 //       if (mpiGrid[cellID]->sysBoundaryLayer == 2) std::cerr << x << " " << y << " " << z << " " << normalDirection[0] << " " << normalDirection[1] << " " << normalDirection[2] << std::endl;
 //      std::cerr << x << " " << y << " " << z << " " << normalDirection[0] << " " << normalDirection[1] << " " << normalDirection[2] << std::endl;
 #endif
-      phiprof::stop("Ionosphere::fieldSolverGetNormalDirection");
       return normalDirection;
    }
    
@@ -632,10 +630,8 @@ namespace SBC {
       const CellID& cellID,
       const int& popID
    ) {
-//       phiprof::start("vlasovBoundaryCondition (Ionosphere)");
 //       const SpatialCell * cell = mpiGrid[cellID];
 //       this->vlasovBoundaryCopyFromAllClosestNbrs(mpiGrid, cellID);
-//       phiprof::stop("vlasovBoundaryCondition (Ionosphere)");
    }
 
    /**

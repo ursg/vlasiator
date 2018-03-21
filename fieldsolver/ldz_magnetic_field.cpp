@@ -155,23 +155,17 @@ void propagateMagneticFieldSimple(
    cint& RKCase
 ) {
 
-   phiprof::start("Propagate magnetic field");
    
    fs_cache::CacheContainer& cacheContainer = fs_cache::getCache();
 
-   int timer=phiprof::initializeTimer("Compute system inner cells");
-   phiprof::start(timer);
 
    // Propagate B on all local cells:
    propagateMagneticField(cacheContainer.localCellsCache,cacheContainer.local_NOT_SYSBOUND_DO_NOT_COMPUTE,dt,RKCase);
 
-   //phiprof::stop("propagate not sysbound",localCells.size(),"Spatial Cells");
-   phiprof::stop(timer,cacheContainer.local_NOT_SYSBOUND_DO_NOT_COMPUTE.size(),"Spatial Cells");
 
    //This communication is needed for boundary conditions, in practice almost all
    //of the communication is going to be redone in calculateDerivativesSimple
    //TODO: do not transfer if there are no field boundaryconditions
-   phiprof::start("MPI");
    if (RKCase == RK_ORDER1 || RKCase == RK_ORDER2_STEP2) {
       // Exchange PERBX,PERBY,PERBZ with neighbours
       spatial_cell::SpatialCell::set_mpi_transfer_type(Transfer::CELL_PERB,true);
@@ -181,33 +175,25 @@ void propagateMagneticFieldSimple(
    }
 
    mpiGrid.update_copies_of_remote_neighbors(SYSBOUNDARIES_EXTENDED_NEIGHBORHOOD_ID);
-   phiprof::stop("MPI");
 
    // Propagate B on system boundary/process inner cells
-   timer=phiprof::initializeTimer("Compute system boundary/process inner cells");
-   phiprof::start(timer);
    #pragma omp parallel for
    for (size_t c=0; c<cacheContainer.boundaryCellsWithLocalNeighbours.size(); ++c) {
       const uint16_t localID = cacheContainer.boundaryCellsWithLocalNeighbours[c];
       propagateSysBoundaryMagneticField(mpiGrid, cacheContainer.localCellsCache, localID, sysBoundaries, dt, RKCase);
    }
-   phiprof::stop(timer,cacheContainer.boundaryCellsWithLocalNeighbours.size(),"Spatial Cells");
 
    // Propagate B on system boundary/process boundary cells
-   timer=phiprof::initializeTimer("Compute system boundary/process boundary cells");
-   phiprof::start(timer);
    #pragma omp parallel for
    for (size_t c=0; c<cacheContainer.boundaryCellsWithRemoteNeighbours.size(); ++c) {
       const uint16_t localID = cacheContainer.boundaryCellsWithRemoteNeighbours[c];
       propagateSysBoundaryMagneticField(mpiGrid, cacheContainer.localCellsCache, localID, sysBoundaries, dt, RKCase);
    }
-   phiprof::stop(timer,cacheContainer.boundaryCellsWithRemoteNeighbours.size(),"Spatial Cells");
 
    const size_t N_cells 
      = cacheContainer.boundaryCellsWithRemoteNeighbours.size()
      + cacheContainer.boundaryCellsWithLocalNeighbours.size()
      + cacheContainer.local_NOT_SYSBOUND_DO_NOT_COMPUTE.size();
-   phiprof::stop("Propagate magnetic field",N_cells,"Spatial Cells");
 }
 
 /*! \brief Low-level magnetic field propagation function.

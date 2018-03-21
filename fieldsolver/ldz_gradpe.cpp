@@ -343,40 +343,23 @@ void calculateGradPeTermSimple(
 ) {
    namespace fs = fieldsolver;
    int timer;
-   phiprof::start("Calculate GradPe term");
    SpatialCell::set_mpi_transfer_type(Transfer::CELL_DERIVATIVES);
 
    fs_cache::CacheContainer& cacheContainer = fs_cache::getCache();
 
-   timer=phiprof::initializeTimer("Start communication of derivatives","MPI");
-   phiprof::start(timer);
    mpiGrid.start_remote_neighbor_copy_updates(FIELD_SOLVER_NEIGHBORHOOD_ID);
-   phiprof::stop(timer);
 
    // Calculate GradPe term on inner cells
-   timer=phiprof::initializeTimer("Compute inner cells");
-   phiprof::start(timer);
    calculateGradPeTerm(sysBoundaries,cacheContainer.localCellsCache,cacheContainer.cellsWithLocalNeighbours,RKCase);
-   phiprof::stop(timer,cacheContainer.cellsWithLocalNeighbours.size(),"Spatial Cells");
 
-   timer=phiprof::initializeTimer("Wait for receives","MPI","Wait");
-   phiprof::start(timer);
    mpiGrid.wait_remote_neighbor_copy_update_receives(FIELD_SOLVER_NEIGHBORHOOD_ID);
-   phiprof::stop(timer);
    
    // Calculate GradPe term on boundary cells:
-   timer=phiprof::initializeTimer("Compute boundary cells");
-   phiprof::start(timer);
    calculateGradPeTerm(sysBoundaries,cacheContainer.localCellsCache,cacheContainer.cellsWithRemoteNeighbours,RKCase);
-   phiprof::stop(timer,cacheContainer.cellsWithRemoteNeighbours.size(),"Spatial Cells");
 
-   timer=phiprof::initializeTimer("Wait for sends","MPI","Wait");
-   phiprof::start(timer);
    mpiGrid.wait_remote_neighbor_copy_update_sends();
-   phiprof::stop(timer);
 
    const size_t N_cells = cacheContainer.cellsWithRemoteNeighbours.size()
      + cacheContainer.cellsWithLocalNeighbours.size();
 
-   phiprof::stop("Calculate GradPe term",N_cells,"Spatial Cells");
 }

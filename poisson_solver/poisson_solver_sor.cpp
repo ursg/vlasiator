@@ -475,7 +475,6 @@ namespace poisson {
 
       // If mesh partitioning has changed, recalculate pointer caches
       if (Parameters::meshRepartitioned == true) {
-         phiprof::start("Pointer Caching");
          if (Poisson::is2D == true) {
             cachePointers2D(mpiGrid,mpiGrid.get_local_cells_on_process_boundary(POISSON_NEIGHBORHOOD_ID),bndryCellPointersRED,bndryCellPointersBLACK);
             cachePointers2D(mpiGrid,mpiGrid.get_local_cells_not_on_process_boundary(POISSON_NEIGHBORHOOD_ID),innerCellPointersRED,innerCellPointersBLACK);
@@ -483,27 +482,20 @@ namespace poisson {
             cachePointers3D(mpiGrid,mpiGrid.get_local_cells_on_process_boundary(POISSON_NEIGHBORHOOD_ID),bndryCellPointersRED,bndryCellPointersBLACK);
             cachePointers3D(mpiGrid,mpiGrid.get_local_cells_not_on_process_boundary(POISSON_NEIGHBORHOOD_ID),innerCellPointersRED,innerCellPointersBLACK);
          }
-         phiprof::stop("Pointer Caching");
       }
 
       // Calculate charge density
 #warning CHANGE ME after DCCRG works
-      //phiprof::start("MPI (RHOQ)");
       SpatialCell::set_mpi_transfer_type(Transfer::CELL_RHOQ_TOT,false);
       //mpiGrid.start_remote_neighbor_copy_receives(POISSON_NEIGHBORHOOD_ID);
-      //phiprof::stop("MPI (RHOQ)");
       for (size_t c=0; c<bndryCellPointersRED.size(); ++c) calculateChargeDensity(bndryCellPointersRED[c].cell);
       for (size_t c=0; c<bndryCellPointersBLACK.size(); ++c) calculateChargeDensity(bndryCellPointersBLACK[c].cell);
-      //phiprof::start("MPI (RHOQ)");
       //mpiGrid.start_remote_neighbor_copy_sends(POISSON_NEIGHBORHOOD_ID);
       mpiGrid.start_remote_neighbor_copy_updates(POISSON_NEIGHBORHOOD_ID);
-      //phiprof::stop("MPI (RHOQ)");
       for (size_t c=0; c<innerCellPointersRED.size(); ++c) calculateChargeDensity(innerCellPointersRED[c].cell);
       for (size_t c=0; c<innerCellPointersBLACK.size(); ++c) calculateChargeDensity(innerCellPointersBLACK[c].cell);
-      phiprof::start("MPI (RHOQ)");
       //mpiGrid.wait_remote_neighbor_copy_updates(POISSON_NEIGHBORHOOD_ID);
       mpiGrid.wait_remote_neighbor_copy_updates(POISSON_NEIGHBORHOOD_ID);
-      phiprof::stop("MPI (RHOQ)");
 
       SpatialCell::set_mpi_transfer_type(Transfer::CELL_PHI,false);
       int iterations = 0;
@@ -519,12 +511,10 @@ namespace poisson {
             // Make a copy of the potential if we are going 
             // to evaluate the solution error
             if (N == N_iterations-1) {
-               if (tid == 0) phiprof::start("Copy Old Potential");
                #pragma omp parallel for
                for (size_t c=0; c<Poisson::localCellParams.size(); ++c) {
                   Poisson::localCellParams[c][CellParams::PHI_TMP] = Poisson::localCellParams[c][CellParams::PHI];
                }
-               if (tid == 0) phiprof::stop("Copy Old Potential",Poisson::localCellParams.size(),"Spatial Cells");
             }
 
             // Solve red cells first, the black cells
@@ -570,19 +560,14 @@ namespace poisson {
       //else                       evaluator = evaluate3D;
       
       // Compute new potential on process boundary cells
-      if (tid == 0) phiprof::start("Evaluate potential");
       if (oddness == RED) evaluate2D(bndryCellPointersRED,oddness);
       else                evaluate2D(bndryCellPointersBLACK,oddness);      
       if (tid == 0) {
 //         size_t cells = bndryCellPointersRED.size() + bndryCellPointersBLACK.size();
-//         phiprof::stop("Evaluate potential",cells,"Spatial Cells");
 
          // Exchange new potential values on process boundaries
-//         phiprof::start("MPI (start copy)");
          mpiGrid.start_remote_neighbor_copy_updates(POISSON_NEIGHBORHOOD_ID);
-//         phiprof::stop("MPI (start copy)");
 
-//         phiprof::start("Evaluate potential");
       }
 
       // Compute new potential on inner cells
@@ -593,13 +578,9 @@ namespace poisson {
       if (tid == 0) {
          size_t cells = innerCellPointersRED.size() + innerCellPointersBLACK.size();
          cells += bndryCellPointersRED.size() + bndryCellPointersBLACK.size();
-//         phiprof::stop("Evaluate potential",cells,"Spatial Cells");
-//         phiprof::start("MPI (wait copy)");
          mpiGrid.wait_remote_neighbor_copy_updates(POISSON_NEIGHBORHOOD_ID);
-//         phiprof::stop("MPI (wait copy)");
 
          
-         phiprof::stop("Evaluate potential",cells,"Spatial Cells");
       }
 //      #pragma omp barrier
       

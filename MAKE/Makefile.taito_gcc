@@ -77,8 +77,8 @@ LIB_JEMALLOC = -L$(LIBRARY_PREFIX)/taito/openmpi/$(MPT_VERSION)/$(CC_BRAND)/$(CC
 INC_VLSV = -I$(LIBRARY_PREFIX)/taito/openmpi/$(MPT_VERSION)/$(CC_BRAND)/$(CC_BRAND_VERSION)/vlsv
 LIB_VLSV = -L$(LIBRARY_PREFIX)/taito/openmpi/$(MPT_VERSION)/$(CC_BRAND)/$(CC_BRAND_VERSION)/vlsv -lvlsv
 
-LIB_PROFILE = -L$(LIBRARY_PREFIX)/taito/openmpi/$(MPT_VERSION)/$(CC_BRAND)/$(CC_BRAND_VERSION)/phiprof/2.0/lib -lphiprof
-INC_PROFILE = -I$(LIBRARY_PREFIX)/taito/openmpi/$(MPT_VERSION)/$(CC_BRAND)/$(CC_BRAND_VERSION)/phiprof/2.0/include
+LIB_PROFILE = 
+INC_PROFILE = 
 
 #LIB_PAPI = -L$(LIBRARY_PREFIX)/taito/openmpi/$(MPT_VERSION)/$(CC_BRAND)/$(CC_BRAND_VERSION)/papi/5.5.0/lib -lpapi
 #INC_PAPI = -I$(LIBRARY_PREFIX)/taito/openmpi/$(MPT_VERSION)/$(CC_BRAND)/$(CC_BRAND_VERSION)/papi/5.5.0/include

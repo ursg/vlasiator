@@ -400,7 +400,6 @@ void calculateDerivativesSimple(
 
    #warning IMPROVE ME this function is not multithreaded
    
-   phiprof::start("Calculate face derivatives");
 
    switch (RKCase) {
     case RK_ORDER1:
@@ -439,13 +438,8 @@ void calculateDerivativesSimple(
       abort();
    }
 
-   timer=phiprof::initializeTimer("Start comm","MPI");
-   phiprof::start(timer);
    mpiGrid.start_remote_neighbor_copy_updates(FIELD_SOLVER_NEIGHBORHOOD_ID);
-   phiprof::stop(timer);
 
-   timer=phiprof::initializeTimer("Compute process inner cells");
-   phiprof::start(timer);
 
    // Calculate derivatives on process inner cells
    for (size_t c=0; c<fs_cache::getCache().cellsWithLocalNeighbours.size(); ++c) {
@@ -455,16 +449,10 @@ void calculateDerivativesSimple(
       if (cache.sysBoundaryFlag == sysboundarytype::DO_NOT_COMPUTE) continue;
       calculateDerivatives(mpiGrid,cache,sysBoundaries, RKCase);
    }
-   phiprof::stop(timer,fs_cache::getCache().cellsWithLocalNeighbours.size(),"Spatial Cells");
 
-   timer=phiprof::initializeTimer("Wait for sends","MPI","Wait");
-   phiprof::start(timer);
    mpiGrid.wait_remote_neighbor_copy_update_receives(FIELD_SOLVER_NEIGHBORHOOD_ID);
-   phiprof::stop(timer);
    
    // Calculate derivatives on process boundary cells
-   timer=phiprof::initializeTimer("Compute process boundary cells");
-   phiprof::start(timer);
    for (size_t c=0; c<fs_cache::getCache().cellsWithRemoteNeighbours.size(); ++c) {
       const uint16_t localID = fs_cache::getCache().cellsWithRemoteNeighbours[c];
       fs_cache::CellCache cache = fs_cache::getCache().localCellsCache[localID];
@@ -472,16 +460,11 @@ void calculateDerivativesSimple(
       if (cache.sysBoundaryFlag == sysboundarytype::DO_NOT_COMPUTE) continue;
       calculateDerivatives(mpiGrid,cache,sysBoundaries, RKCase);
    }
-   phiprof::stop(timer,fs_cache::getCache().cellsWithRemoteNeighbours.size(),"Spatial Cells");
 
-   timer=phiprof::initializeTimer("Wait for sends","MPI","Wait");
-   phiprof::start(timer);
    mpiGrid.wait_remote_neighbor_copy_update_sends();
-   phiprof::stop(timer);
 
    const size_t N_cells = fs_cache::getCache().cellsWithLocalNeighbours.size()
      + fs_cache::getCache().cellsWithRemoteNeighbours.size();
-   phiprof::stop("Calculate face derivatives",N_cells,"Spatial Cells");   
 }
 
 /*! \brief Low-level spatial derivatives calculation.
@@ -593,39 +576,22 @@ void calculateBVOLDerivativesSimple(
    int timer;
    namespace fs = fieldsolver;
    
-   phiprof::start("Calculate volume derivatives");
    
    spatial_cell::SpatialCell::set_mpi_transfer_type(Transfer::CELL_BVOL);
    mpiGrid.update_copies_of_remote_neighbors(FIELD_SOLVER_NEIGHBORHOOD_ID);
    
-   timer=phiprof::initializeTimer("Start comm","MPI");
-   phiprof::start(timer);
    mpiGrid.start_remote_neighbor_copy_updates(FIELD_SOLVER_NEIGHBORHOOD_ID);
-   phiprof::stop(timer);
 
    // Calculate derivatives on process inner cells
-   timer=phiprof::initializeTimer("Compute process inner cells");
-   phiprof::start(timer);
    calculateBVOLDerivatives(mpiGrid,fs_cache::getCache().localCellsCache,fs_cache::getCache().cellsWithLocalNeighbours,sysBoundaries);
-   phiprof::stop(timer,fs_cache::getCache().cellsWithLocalNeighbours.size(),"Spatial Cells");
 
-   timer=phiprof::initializeTimer("Wait for sends","MPI","Wait");
-   phiprof::start(timer);
    mpiGrid.wait_remote_neighbor_copy_update_receives(FIELD_SOLVER_NEIGHBORHOOD_ID);
-   phiprof::stop(timer);
 
    // Calculate derivatives on process boundary cells
-   timer=phiprof::initializeTimer("Compute process boundary cells");
-   phiprof::start(timer);
    calculateBVOLDerivatives(mpiGrid,fs_cache::getCache().localCellsCache,fs_cache::getCache().cellsWithRemoteNeighbours,sysBoundaries);
-   phiprof::stop(timer,fs_cache::getCache().cellsWithRemoteNeighbours.size(),"Spatial Cells");
 
-   timer=phiprof::initializeTimer("Wait for sends","MPI","Wait");
-   phiprof::start(timer);
    mpiGrid.wait_remote_neighbor_copy_update_sends();
-   phiprof::stop(timer);
 
    CellID N_cells = fs_cache::getCache().cellsWithLocalNeighbours.size() 
                   + fs_cache::getCache().cellsWithRemoteNeighbours.size();
-   phiprof::stop("Calculate volume derivatives",N_cells,"Spatial Cells");
 }
