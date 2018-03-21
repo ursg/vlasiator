@@ -32,8 +32,6 @@
 #include <set>
 #include <stdint.h>
 
-#include <phiprof.hpp>
-
 #include "../common.h"
 #include "../parameters.h"
 #include "../projects/project.h"
