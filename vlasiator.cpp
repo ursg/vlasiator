@@ -722,6 +722,8 @@ int main(int argn,char* args[]) {
       P::t += P::dt;
    }
 
+   MPI_Barrier(MPI_COMM_WORLD);
+
    double after = MPI_Wtime();
    
    if (P::propagateField ) { 
@@ -749,6 +751,9 @@ int main(int argn,char* args[]) {
          ", seconds per simulated second " <<  timePerSecond << endl;
       }
       logFile << writeVerbose;
+
+      cerr << "total execution time for " <<  (P::tstep-P::tstep_min) << " iterations was " << after-startTime << " seconds. " << timePerStep << " seconds per iteration." << endl;
+      logFile << "total execution time for " <<  (P::tstep-P::tstep_min) << " iterations was " << after-startTime << " seconds. " << timePerStep << " seconds per iteration." << endl;
    }
    
    if (myRank == MASTER_RANK) logFile << "(MAIN): Exiting." << endl << writeVerbose;
