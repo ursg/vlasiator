@@ -118,6 +118,21 @@ struct shockReflectivityScenario : Scenario {
       }
 };
 
+// Foreshock beam focussing scenario
+struct foreshockBeamScenario : Scenario {
+   LinearHistogram1D ypos;
+
+   ParticleContainer initialParticles(Field& E, Field& B, Field& V);
+  void newTimestep(int input_file_counter, int step, double time, ParticleContainer& particles, Field& E, Field& B,
+        Field& V);
+   void finalize(ParticleContainer& particles, Field& E, Field& B, Field& V);
+
+   foreshockBeamScenario() :
+      ypos(100, ParticleParameters::foreshockStartY, ParticleParameters::foreshockStopY)
+   {
+   };
+};
+
 // Initialize particles on a plane in front of the shock, track their precipitation upstream or downstream
 struct ipShockScenario : Scenario {
   FILE * traFile;

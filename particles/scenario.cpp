@@ -295,8 +295,64 @@ void shockReflectivityScenario::finalize(ParticleContainer& particles, Field& E,
    reflected.writeBovAscii("reflected.dat.bov",0,"reflected.dat");
 }
 
+ParticleContainer foreshockBeamScenario::initialParticles(Field& E, Field& B, Field& V) {
+   ParticleContainer particles;
+
+   std::default_random_engine generator(ParticleParameters::random_seed);
+   Distribution* velocity_distribution=ParticleParameters::distribution(generator);
+
+   std::random_device rd;
+   std::mt19937 gen(rd());
+   std::uniform_real_distribution<> disx(ParticleParameters::foreshockStartX, ParticleParameters::foreshockStopX);
+   std::uniform_real_distribution<> disy(ParticleParameters::foreshockStartY, ParticleParameters::foreshockStopY);
+
+   Vec3d beamOffset = ParticleParameters::foreshockBeamSpeed;
+
+   /* Loop over particles to generate */
+   for(unsigned int i=0; i< ParticleParameters::num_particles; i++) {
+      /* Create a particle at a random position within the initialisation box */
+      Real posx = disx(gen);
+      Real posy = disy(gen);
+      Real posz = 0.; 
+      Vec3d vpos(posx, posy, posz);
+
+      /* Look up beam velocity in the parameters */
+      Vec3d bulk_vel = V(vpos); 
+
+      /* Create a particle with velocity drawn from the given distribution ... */
+      Particle p = velocity_distribution->next_particle();
+      /* Shift it by the bulk velocity ... */
+      p.v += bulk_vel + beamOffset;
+
+      /* And put it in place. */
+      p.x=vpos;
+      particles.push_back(p);
+   }
+
+   delete velocity_distribution;
+   return particles;
+}
+void foreshockBeamScenario::newTimestep(int input_file_counter, int step, double time, ParticleContainer& particles, Field& E, Field& B,
+        Field& V) {
+
+   // Write out the state
+   //char filename_buffer[256];
+
+   //snprintf(filename_buffer,256, ParticleParameters::output_filename_pattern.c_str(),input_file_counter-1);
+   //writeParticles(particles, filename_buffer);
+
+}
 
 
+void foreshockBeamScenario::finalize(ParticleContainer& particles, Field& E, Field& B, Field& V) {
+   // Put final particle z-positions into histogram
+   for(unsigned int i=0; i< ParticleParameters::num_particles; i++) {
+      ypos.addValue(particles[i].x[1]);
+   }
+
+   // Save histogram
+   ypos.saveAscii("ypos.dat");
+}
 
 ParticleContainer ipShockScenario::initialParticles(Field& E, Field& B, Field& V) {
 
@@ -422,6 +478,7 @@ Scenario* createScenario(std::string name) {
    scenario_lookup["analysator"]=&createScenario<analysatorScenario>;
    scenario_lookup["reflectivity"]=&createScenario<shockReflectivityScenario>;
    scenario_lookup["ipshock"]=&createScenario<ipShockScenario>;
+   scenario_lookup["foreshock"]=&createScenario<foreshockBeamScenario>;
 
    if(scenario_lookup.find(name) == scenario_lookup.end()) {
       std::cerr << "Error: can't find particle pusher mode \"" << name << "\". Aborting." << std::endl;

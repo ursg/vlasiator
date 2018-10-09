@@ -70,6 +70,12 @@ struct ParticleParameters {
    static Real ipshock_transmit;  /*!< X-Coordinate for particle transmission (downstream) (meters) */
    static Real ipshock_reflect;   /*!< X-Coordinate for particle reflection (upstream) (meters) */
 
+   static Real foreshockStartX; /*!< Smaller x-coordinate for foreshock beam injection (meters) */
+   static Real foreshockStopX; /*!< Larger x-coordinate for foreshock beam injection (meters) */
+   static Real foreshockStartY; /*!< Smaller z-coordinate for foreshock beam injection (meters) */
+   static Real foreshockStopY; /*!< Larger z-coordinate for foreshock beam injection (meters) */
+   static Vec3d foreshockBeamSpeed; /*!< Velocity offset (over bulk) of the beam */
+
    static std::default_random_engine::result_type random_seed; /*!< Random seed for particle creation */
    static Distribution* (*distribution)(std::default_random_engine&); /*!< Type of distribution from which to sample the particles */
    static Real temperature; /*!< Initial particle temperature (for distributions where a temperature is meaningful) */

@@ -72,6 +72,12 @@ Real P::ipshock_inject_z1;
 Real P::ipshock_transmit;
 Real P::ipshock_reflect;
 
+Real P::foreshockStartX;
+Real P::foreshockStopX;
+Real P::foreshockStartY;
+Real P::foreshockStopY;
+Vec3d P::foreshockBeamSpeed;
+
 bool ParticleParameters::addParameters() {
    Readparameters::add("particles.input_filename_pattern","Printf() like pattern giving the field input filenames.",
          std::string("bulk.%07i.vlsv"));
@@ -143,6 +149,21 @@ bool ParticleParameters::addParameters() {
    Readparameters::add("particles.ipshock_reflect",
          "X-Coordinate of threshold for where particles are counted  as reflected for the ipShock scenario", 10.e6);
 
+   Readparameters::add("particles.foreshockStartX",
+         "X-Coordinate of the lower edge of particle injection region for the foreshock scenario", 1e6);
+   Readparameters::add("particles.foreshockStopX",
+         "X-Coordinate of the upper edge of particle injection region for the foreshock scenario", 2e6);
+   Readparameters::add("particles.foreshockStartY",
+         "Y-Coordinate of the lower edge of particle injection region for the foreshock scenario", 1e6);
+   Readparameters::add("particles.foreshockStopY",
+         "Y-Coordinate of the upper edge of particle injection region for the foreshock scenario", 2e6);
+   Readparameters::add("particles.foreshockBeamSpeedX",
+         "X-Offset of beam velocity wrt. the bulk", 0);
+   Readparameters::add("particles.foreshockBeamSpeedY",
+         "Y-Offset of beam velocity wrt. the bulk", 0);
+   Readparameters::add("particles.foreshockBeamSpeedZ",
+         "Z-Offset of beam velocity wrt. the bulk", 0);
+
    return true;
 }
 
@@ -151,6 +172,7 @@ bool ParticleParameters::getParameters() {
    Readparameters::get("particles.output_filename_pattern",P::output_filename_pattern);
 
    Readparameters::get("particles.mode",P::mode);
+   std::cerr << "Pusher is running in " << P::mode << " mode" << std::endl;
 
    Readparameters::get("particles.init_x",P::init_x);
    Readparameters::get("particles.init_y",P::init_y);
@@ -236,6 +258,19 @@ bool ParticleParameters::getParameters() {
    Readparameters::get("particles.ipshock_inject_z1", P::ipshock_inject_z1);
    Readparameters::get("particles.ipshock_transmit", P::ipshock_transmit);
    Readparameters::get("particles.ipshock_reflect", P::ipshock_reflect);
+
+   Readparameters::get("particles.foreshockStartX", P::foreshockStartX);
+   Readparameters::get("particles.foreshockStopX", P::foreshockStopX);
+   Readparameters::get("particles.foreshockStartY", P::foreshockStartY);
+   Readparameters::get("particles.foreshockStopY", P::foreshockStopY);
+   std::cerr << "P::foreshockStopY is " << P::foreshockStopY << std::endl;
+
+   Real beamSpeed[3];
+   Readparameters::get("particles.foreshockBeamSpeedX", beamSpeed[0]);
+   Readparameters::get("particles.foreshockBeamSpeedY", beamSpeed[1]);
+   Readparameters::get("particles.foreshockBeamSpeedZ", beamSpeed[2]);
+   std::cerr << "Foreshock beam speed is [" << beamSpeed[0] << ", " << beamSpeed[1] << ", " << beamSpeed[2] << "]" << std::endl;
+   P::foreshockBeamSpeed.load(beamSpeed);
 
    return true;
 }
