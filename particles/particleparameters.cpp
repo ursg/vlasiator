@@ -77,6 +77,7 @@ Real P::foreshockStopX;
 Real P::foreshockStartY;
 Real P::foreshockStopY;
 Vec3d P::foreshockBeamSpeed;
+int P::foreshockWriteParticles;
 
 bool ParticleParameters::addParameters() {
    Readparameters::add("particles.input_filename_pattern","Printf() like pattern giving the field input filenames.",
@@ -163,6 +164,7 @@ bool ParticleParameters::addParameters() {
          "Y-Offset of beam velocity wrt. the bulk", 0);
    Readparameters::add("particles.foreshockBeamSpeedZ",
          "Z-Offset of beam velocity wrt. the bulk", 0);
+   Readparameters::add("particles.foreshockWriteParticles", "Interval at which to write particle output (input time steps)", 0);
 
    return true;
 }
@@ -271,6 +273,7 @@ bool ParticleParameters::getParameters() {
    Readparameters::get("particles.foreshockBeamSpeedZ", beamSpeed[2]);
    std::cerr << "Foreshock beam speed is [" << beamSpeed[0] << ", " << beamSpeed[1] << ", " << beamSpeed[2] << "]" << std::endl;
    P::foreshockBeamSpeed.load(beamSpeed);
+   Readparameters::get("particles.foreshockWriteParticles", P::foreshockWriteParticles);
 
    return true;
 }

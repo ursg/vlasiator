@@ -59,7 +59,7 @@ class Histogram1D
       void save(const char* filename) const;
       void load(const char* filename);
       virtual void saveAscii(const char* filename) const;
-      virtual void addValue(double value) = 0;
+      virtual void addValue(double value, double weight=1.) = 0;
 
       // Access bins
       double operator()(int x) {
@@ -78,7 +78,7 @@ class LinearHistogram1D : public Histogram1D
       LinearHistogram1D(size_t n, double _low, double _high) :
          Histogram1D(n), low(_low), high(_high) {};
 
-      virtual void addValue(double value) {
+      virtual void addValue(double value, double weight=1) {
          value -= low;
          value /= high - low;
 
@@ -89,7 +89,7 @@ class LinearHistogram1D : public Histogram1D
          } else if (histogram_bin + 1 >= (ssize_t)num_bins) {
             histogram_bin = num_bins - 1;
          }
-         bins[histogram_bin]++;
+         bins[histogram_bin]+=weight;
       }
 
       virtual void saveAscii(const char* filename) const;
@@ -106,7 +106,7 @@ class LogHistogram1D : public Histogram1D
       LogHistogram1D(size_t n, double _low, double _high) :
          Histogram1D(n), low(_low), high(_high) {};
 
-      virtual void addValue(double value) {
+      virtual void addValue(double value, double weight=1) {
          value /= low;
          value = log(value);
          value /= log(high / low);
@@ -118,7 +118,7 @@ class LogHistogram1D : public Histogram1D
          } else if (histogram_bin + 1 >= (ssize_t)num_bins) {
             histogram_bin = num_bins - 1;
          }
-         bins[histogram_bin]++;
+         bins[histogram_bin]+=weight;
       }
 
    private:
@@ -407,7 +407,7 @@ class Histogram3D
 
       void save(const char* filename) const;
       void load(const char* filename);
-      virtual void addValue(Vec3d value) = 0;
+      virtual void addValue(Vec3d value, double weight=1.) = 0;
 
       // Access bins
       double operator()(int x, int y, int z) {
@@ -426,7 +426,7 @@ class LinearHistogram3D : public Histogram3D
          Histogram3D(n),
          low(_low), high(_high) {};
 
-      virtual void addValue(Vec3d value) {
+      virtual void addValue(Vec3d value, double weight=1) {
          value -= low;
          value /= high - low;
 
@@ -442,7 +442,7 @@ class LinearHistogram3D : public Histogram3D
                histogram_bin[i] = num_bins[i] - 1;
             }
          }
-         bins[histogram_bin[0] + num_bins[0] * histogram_bin[1] + num_bins[0] * num_bins[1] * histogram_bin[2]]++;
+         bins[histogram_bin[0] + num_bins[0] * histogram_bin[1] + num_bins[0] * num_bins[1] * histogram_bin[2]]+=weight;
       }
 
       Vec3d coords_for_cell(Vec3d cell) {

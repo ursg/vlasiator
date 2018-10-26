@@ -312,7 +312,7 @@ ParticleContainer foreshockBeamScenario::initialParticles(Field& E, Field& B, Fi
    for(unsigned int i=0; i< ParticleParameters::num_particles; i++) {
       /* Create a particle at a random position within the initialisation box */
       Real posx = disx(gen);
-      Real posy = disy(gen);
+      Real posy = disy(gen) - sin(5.*M_PI/360.)*(posx-ParticleParameters::foreshockStartX);
       Real posz = 0.; 
       Vec3d vpos(posx, posy, posz);
 
@@ -335,19 +335,31 @@ ParticleContainer foreshockBeamScenario::initialParticles(Field& E, Field& B, Fi
 void foreshockBeamScenario::newTimestep(int input_file_counter, int step, double time, ParticleContainer& particles, Field& E, Field& B,
         Field& V) {
 
-   // Write out the state
-   //char filename_buffer[256];
+   if(ParticleParameters::foreshockWriteParticles > 0 && !(input_file_counter % ParticleParameters::foreshockWriteParticles)) {
+      // Write out the state
+      char filename_buffer[256];
 
-   //snprintf(filename_buffer,256, ParticleParameters::output_filename_pattern.c_str(),input_file_counter-1);
-   //writeParticles(particles, filename_buffer);
-
+      snprintf(filename_buffer,256, ParticleParameters::output_filename_pattern.c_str(),input_file_counter-1);
+      writeParticles(particles, filename_buffer);
+   }
 }
 
 
 void foreshockBeamScenario::finalize(ParticleContainer& particles, Field& E, Field& B, Field& V) {
    // Put final particle z-positions into histogram
    for(unsigned int i=0; i< ParticleParameters::num_particles; i++) {
-      ypos.addValue(particles[i].x[1]);
+
+      // Calculate parallel velocity
+      //Vec3d Bval = B(particles[i].x);
+      Vec3d Bval(sin(-5*M_PI/360.), cos(-5*M_PI/360), 0);
+      double vpar = dot_product(particles[i].v,Bval)/dot_product(Bval,Bval);
+
+      // Only count particles with negative vpar
+      if(vpar < 0) {
+         double effective_y = particles[i].x[1] +
+            sin(5.*M_PI/360.) * (particles[i].x[0] - ParticleParameters::foreshockStartX);
+         ypos.addValue(effective_y,vpar);
+      }
    }
 
    // Save histogram

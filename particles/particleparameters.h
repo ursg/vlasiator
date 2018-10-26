@@ -75,6 +75,7 @@ struct ParticleParameters {
    static Real foreshockStartY; /*!< Smaller z-coordinate for foreshock beam injection (meters) */
    static Real foreshockStopY; /*!< Larger z-coordinate for foreshock beam injection (meters) */
    static Vec3d foreshockBeamSpeed; /*!< Velocity offset (over bulk) of the beam */
+   static int foreshockWriteParticles; /*!< Interval at which to write particle output data (input time steps) */
 
    static std::default_random_engine::result_type random_seed; /*!< Random seed for particle creation */
    static Distribution* (*distribution)(std::default_random_engine&); /*!< Type of distribution from which to sample the particles */
