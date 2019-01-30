@@ -131,7 +131,7 @@ class LogHistogram1D : public Histogram1D
 class Histogram2D
 {
    public:
-      Histogram2D(size_t n[2]) {
+      Histogram2D(const size_t n[2]) {
          num_bins[0] = n[0];
          num_bins[1] = n[1];
 
@@ -157,6 +157,10 @@ class Histogram2D
          bins = targetbins;
       }
 
+      // Reset to zero
+      void clear() {
+         memset(bins, 0, sizeof(double) * num_bins[0] * num_bins[1]);
+      }
       void save(const char* filename) const;
       void load(const char* filename);
       virtual void addValue(Vec2d value, double weight=1.) = 0;
@@ -175,8 +179,11 @@ class LinearHistogram2D : public Histogram2D
 {
 
    public:
-      LinearHistogram2D(size_t n[2], Vec2d _low, Vec2d _high) :
+      LinearHistogram2D(const size_t n[2], Vec2d _low, Vec2d _high) :
          Histogram2D(n),
+         low(_low), high(_high) {};
+      LinearHistogram2D(const std::array<size_t, 2>& n, Vec2d _low, Vec2d _high) :
+         Histogram2D(&(n[0])),
          low(_low), high(_high) {};
       LinearHistogram2D(size_t nx, size_t ny, Vec2d _low, Vec2d _high) :
          Histogram2D(&nx),

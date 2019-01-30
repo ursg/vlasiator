@@ -121,14 +121,17 @@ struct shockReflectivityScenario : Scenario {
 // Foreshock beam focussing scenario
 struct foreshockBeamScenario : Scenario {
    LinearHistogram1D ypos;
+   LinearHistogram2D phaseHist;
 
    ParticleContainer initialParticles(Field& E, Field& B, Field& V);
   void newTimestep(int input_file_counter, int step, double time, ParticleContainer& particles, Field& E, Field& B,
         Field& V);
+  void afterPush(int step, double time, ParticleContainer& particles, Field& E, Field& B, Field& V);
    void finalize(ParticleContainer& particles, Field& E, Field& B, Field& V);
 
    foreshockBeamScenario() :
-      ypos(100, ParticleParameters::foreshockStartY, ParticleParameters::foreshockStopY)
+      ypos(100, ParticleParameters::foreshockStartY, ParticleParameters::foreshockStopY),
+      phaseHist({1000,500},{0,0},{2*M_PI,M_PI})
    {
    };
 };

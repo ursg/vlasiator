@@ -332,6 +332,37 @@ ParticleContainer foreshockBeamScenario::initialParticles(Field& E, Field& B, Fi
    delete velocity_distribution;
    return particles;
 }
+
+void foreshockBeamScenario::afterPush(int step, double time, ParticleContainer& particles, Field& E, Field& B, Field& V) {
+
+   for(unsigned int i=0; i<particles.size(); i++) {
+      Vec3d& v = particles[i].v;
+      Vec3d& x = particles[i].x;
+
+      // Determine wave phase at particle position
+      Vec3d Bval = B(x);
+      double Bperp1 = Bval[1];
+      double Bperp2 = sin(-5.*M_PI/360.)*Bval[0] + cos(-5.*M_PI/360.) * Bval[2];
+      double wavePhase = atan2(Bperp2,Bperp1);
+
+      //double phi = acos( -v[0] / sqrt(v[1]*v[1] + v[2]*v[2])) + wavePhase;
+      
+      double vperp1 = v[1];
+      double vperp2 = sin(-5.*M_PI/360.)*v[0] + cos(-5.*M_PI/360.)*v[2];
+      double phi = atan2(vperp2,vperp1) - wavePhase;
+      while(phi > 2*M_PI) {
+         phi -= 2*M_PI;
+      }
+      while(phi < 0) {
+         phi += 2*M_PI;
+      }
+
+      double theta = acos( v[0]/sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]));
+      phaseHist.addValue({phi,theta});
+   }
+
+}
+
 void foreshockBeamScenario::newTimestep(int input_file_counter, int step, double time, ParticleContainer& particles, Field& E, Field& B,
         Field& V) {
 
@@ -342,6 +373,14 @@ void foreshockBeamScenario::newTimestep(int input_file_counter, int step, double
       snprintf(filename_buffer,256, ParticleParameters::output_filename_pattern.c_str(),input_file_counter-1);
       writeParticles(particles, filename_buffer);
    }
+
+   char histfile_buffer[256];
+   char bovfile_buffer[256];
+   snprintf(histfile_buffer,256, "phaseHist_%04d.dat",input_file_counter-1);
+   snprintf(bovfile_buffer,256, "phaseHist_%04d.dat.bov",input_file_counter-1);
+   phaseHist.save(histfile_buffer);
+   phaseHist.writeBovAscii(bovfile_buffer, input_file_counter-1, histfile_buffer); 
+   phaseHist.clear();
 }
 
 
@@ -362,8 +401,10 @@ void foreshockBeamScenario::finalize(ParticleContainer& particles, Field& E, Fie
       }
    }
 
-   // Save histogram
+   // Save histograms
    ypos.saveAscii("ypos.dat");
+   //phaseHist.save("phaseHist.dat");
+   //phaseHist.writeBovAscii("phaseHist.dat.bov", 0, "phaseHist.dat");
 }
 
 ParticleContainer ipShockScenario::initialParticles(Field& E, Field& B, Field& V) {
