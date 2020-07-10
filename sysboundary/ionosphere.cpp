@@ -176,7 +176,7 @@ namespace SBC {
       };
 
       // Forward spherical fibonacci mapping with n points
-      auto SF = [madfrac,Phi](int i, int n) -> Vec3d {
+      auto SF = [madfrac,Phi](int i, int n) -> Vec3Dd {
          Real phi = 2*M_PI*madfrac(i, Phi-1.);
          Real z = 1. - (2.*i +1.)/n;
          Real sinTheta = sqrt(1 - z*z);
@@ -190,7 +190,7 @@ namespace SBC {
          Real cosTheta = 1. - (2.*j+1.)/n;
          Real z = max(0., round(0.5*log(n * M_PI * sqrt(5) * (1.-cosTheta*cosTheta)) / log(Phi)));
 
-         Vec3d nearestSample = SF(j,n);
+         Vec3Dd nearestSample = SF(j,n);
          std::vector<int> nearestSamples;
 
          // Sample neighbourhood to find closest neighbours
@@ -200,8 +200,8 @@ namespace SBC {
             int c = 5 - abs(5 - r*2) + floor((int)r/3);
             int k = j + (i < 6 ? +1 : -1) * (int)round(pow(Phi,z+c-2)/sqrt(5.));
 
-            Vec3d currentSample = SF(k,n);
-            Vec3d nearestToCurrentSample = currentSample - nearestSample;
+            Vec3Dd currentSample = SF(k,n);
+            Vec3Dd nearestToCurrentSample = currentSample - nearestSample;
             Real squaredDistance = dot_product(nearestToCurrentSample,nearestToCurrentSample);
 
             // Early reject by invalid index and distance
@@ -220,9 +220,9 @@ namespace SBC {
             int kPrevious = nearestSamples[(i+nearestSamples.size()-1) % nearestSamples.size()];
             int kNext = nearestSamples[(i+1) % nearestSamples.size()];
 
-            Vec3d currentSample = SF(k,n);
-            Vec3d previousSample = SF(kPrevious, n);
-            Vec3d nextSample = SF(kNext,n);
+            Vec3Dd currentSample = SF(k,n);
+            Vec3Dd previousSample = SF(kPrevious, n);
+            Vec3Dd nextSample = SF(kNext,n);
 
             if(dot_product(previousSample - nextSample, previousSample - nextSample) > dot_product(currentSample - nearestSample, currentSample-nearestSample)) {
                adjacentVertices.push_back(nearestSamples[i]);
@@ -241,7 +241,7 @@ namespace SBC {
       for(int i=0; i< n; i++) {
          Node newNode;
 
-         Vec3d pos = SF(i,n);
+         Vec3Dd pos = SF(i,n);
          newNode.x = {pos[0], pos[1], pos[2]};
          normalizeRadius(newNode, Ionosphere::innerRadius);
 
@@ -738,8 +738,12 @@ namespace SBC {
 
       // Helper function to trace magnetic fieldlines in the given dipole field
       // TODO: Implement something better than euler step
-      auto stepFieldline = [](std::array<Real, 3>& x, std::array<Real, 3>& v, FieldFunction& dipole, Real stepsize) -> void {
+      auto stepFieldline = [](std::array<Real, 3>& x, std::array<Real, 3>& v, FieldFunction& dipole, Real& stepsize) -> void {
 
+         //Arrays for Bfield and Position at next step
+         std::array<Real,3> v2=v;
+         std::array<Real,3> x2;
+   
          // Get field direction
          dipole.setDerivative(0);
          dipole.setComponent(X);
@@ -761,9 +765,35 @@ namespace SBC {
             v[1]*=-1;
             v[2]*=-1;
          }
+      
+         bool inRange =false; 
+         Real angle;
+         while (!inRange){ //Adaptive Stepsize
 
-         for(int c=0; c<3; c++) {
-            x[c] += stepsize * v[c];
+           for(int c=0; c<3; c++) {
+              x2[c] = x[c] +stepsize * v[c];
+           }
+       
+           // Get field direction at next point in field line
+           dipole.setDerivative(0);
+           dipole.setComponent(X);
+           v2[0] = dipole.call(x2[0],x2[1],x2[2]);
+           dipole.setComponent(Y);
+           v[1] = dipole.call(x2[0],x2[1],x2[2]);
+           dipole.setComponent(Z);
+           v2[2] = dipole.call(x2[0],x2[1],x2[2]);
+
+           // Normalize
+           Real norm = 1. / sqrt(v2[0]*v2[0] + v2[1]*v2[1] + v2[2]*v2[2]);
+           for(int c=0; c<3; c++) {
+              v2[c] = v2[c] * norm;
+           }
+
+          //Get angle between B unit vectors of current and next point     
+          angle= acos(v[0]*v2[0]+v[1]*v2[1]+v[2]*v2[2]);
+          inRange= angle>4 && angle <8;
+          //Modify stepsize accordingly if not inRange
+          stepsize = (inRange) ? stepsize : (angle<4)*stepsize*1.5 +  (angle>8)*stepsize/2.; //<- Could end up as a beautyfull infinite loop!
          }
       };
 
@@ -776,10 +806,13 @@ namespace SBC {
 
          std::array<Real, 3> x = no.x;
          std::array<Real, 3> v({0,0,0});
+
+         //Lucky guess for the intial stepsize
+         Real stepSize = 100e3;
          while( sqrt(x[0]*x[0] + x[1]*x[1] + x[2]*x[2]) < 1.5*couplingRadius ) {
 
             // Step at half FSGrid resolution TODO: Choose something better
-            Real stepSize = min(100e3, technicalGrid.DX / 2.); 
+            //Real stepSize = min(100e3, technicalGrid.DX / 2.); 
 
             // Make one step along the fieldline
             stepFieldline(x,v,dipole, stepSize);
@@ -1034,13 +1067,13 @@ namespace SBC {
                                        const std::array<Real, 3>& b,
                                        const std::array<Real, 3>& c) {
 
-     Vec3d av(a[0],a[1],a[2]);
-     Vec3d bv(b[0],b[1],b[2]);
-     Vec3d cv(c[0],c[1],c[2]);
+     Vec3Dd av(a[0],a[1],a[2]);
+     Vec3Dd bv(b[0],b[1],b[2]);
+     Vec3Dd cv(c[0],c[1],c[2]);
 
-     Vec3d z = cross_product(bv-cv, av-cv);
+     Vec3Dd z = cross_product(bv-cv, av-cv);
 
-     Vec3d result = cross_product(z,bv-av)/dot_product( z, cross_product(av,bv) + cross_product(cv, av-bv));
+     Vec3Dd result = cross_product(z,bv-av)/dot_product( z, cross_product(av,bv) + cross_product(cv, av-bv));
 
      return std::array<Real,3>{result[0],result[1],result[2]};
    }
