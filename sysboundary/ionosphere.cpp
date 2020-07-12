@@ -738,10 +738,10 @@ namespace SBC {
 
       // Helper function to trace magnetic fieldlines in the given dipole field
       // TODO: Implement something better than euler step
-      auto stepFieldline = [](std::array<Real, 3>& x, std::array<Real, 3>& v, FieldFunction& dipole, Real& stepsize) -> void {
+      auto stepFieldline = [](std::array<Real, 3>& x, std::array<Real, 3>& v, FieldFunction& dipole, Real& stepsize,Real maxStepsize) -> void {
 
          //Arrays for Bfield and Position at next step
-         std::array<Real,3> v2=v;
+         std::array<Real,3> v2;
          std::array<Real,3> x2;
    
          // Get field direction
@@ -768,6 +768,10 @@ namespace SBC {
       
          bool inRange =false; 
          Real angle;
+         Real minAngle = 2.*M_PI/180.;
+         Real maxAngle = 5.*M_PI/180.;
+         int counter = 0;
+
          while (!inRange){ //Adaptive Stepsize
 
            for(int c=0; c<3; c++) {
@@ -779,7 +783,7 @@ namespace SBC {
            dipole.setComponent(X);
            v2[0] = dipole.call(x2[0],x2[1],x2[2]);
            dipole.setComponent(Y);
-           v[1] = dipole.call(x2[0],x2[1],x2[2]);
+           v2[1] = dipole.call(x2[0],x2[1],x2[2]);
            dipole.setComponent(Z);
            v2[2] = dipole.call(x2[0],x2[1],x2[2]);
 
@@ -789,16 +793,40 @@ namespace SBC {
               v2[c] = v2[c] * norm;
            }
 
+           // Make sure motion is outwards. Flip v2 if dot(x,v2) < 0
+         if(v2[0]*x[0] + v2[1]*x[1] + v2[2]*x[2] < 0) {
+            v2[0]*=-1;
+            v2[1]*=-1;
+            v2[2]*=-1;
+         }
+
           //Get angle between B unit vectors of current and next point     
           angle= acos(v[0]*v2[0]+v[1]*v2[1]+v[2]*v2[2]);
-          inRange= angle>4 && angle <8;
-          //Modify stepsize accordingly if not inRange
-          stepsize = (inRange) ? stepsize : (angle<4)*stepsize*1.5 +  (angle>8)*stepsize/2.; //<- Could end up as a beautyfull infinite loop!
+          //Equator Case 
+          angle = (angle<M_PI/2.)*angle + (angle>=M_PI/2.)*(M_PI - angle);  
+          //Check whether in Range.Polar cases are going to loop forever. Allow up to 100 iterations
+          inRange= (angle>=minAngle && angle <=maxAngle) || counter>=100;
+          inRange=inRange || counter >=100;      
+          //Modify stepsize if not inRange.Otherwise keep it.
+          stepsize = (inRange) ? stepsize : (angle<minAngle)*stepsize*1.1 +  (angle>maxAngle)*stepsize*0.8;        
+          //Limit stepsize other wise we might miss a cell
+          stepsize = min(stepsize, maxStepsize); 
+          counter ++;
+        
+          //printf("Angle = %f \n",angle);
+          //printf("Stepsize = %f \n",stepsize);
+          //printf("Ratio = %f \n",stepsize/100e3);
+          //printf("Ratio2 = %f \n",stepsize/maxStepsize);
+          //printf("Counter= %d \n",counter);
+
          }
+         //Keep new position along field line
+         x=x2;
       };
 
 
       // Trace node coordinates outwards until a non-sysboundary cell is encountered
+      
       #pragma omp parallel for
       for(uint n=0; n<nodes.size(); n++) {
 
@@ -806,16 +834,14 @@ namespace SBC {
 
          std::array<Real, 3> x = no.x;
          std::array<Real, 3> v({0,0,0});
-
-         //Lucky guess for the intial stepsize
-         Real stepSize = 100e3;
+         //Initial  guess for the intial stepsize
+         Real stepSize = min(100e3, technicalGrid.DX / 2.); 
          while( sqrt(x[0]*x[0] + x[1]*x[1] + x[2]*x[2]) < 1.5*couplingRadius ) {
 
-            // Step at half FSGrid resolution TODO: Choose something better
-            //Real stepSize = min(100e3, technicalGrid.DX / 2.); 
-
             // Make one step along the fieldline
-            stepFieldline(x,v,dipole, stepSize);
+            phiprof::start("Trace Field Line");
+            stepFieldline(x,v,dipole, stepSize,technicalGrid.DX/2.);
+            phiprof::stop("Trace Field Line");
 
             // Look up the fsgrid cell beloinging to these coordinates
             std::array<int, 3> fsgridCell;
