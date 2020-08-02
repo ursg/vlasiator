@@ -805,7 +805,7 @@ namespace SBC {
           //Equator Case 
           angle = (angle<M_PI/2.)*angle + (angle>=M_PI/2.)*(M_PI - angle);  
           //Check whether in Range.Polar cases are going to loop forever. Allow up to 100 iterations
-          inRange= (angle>=minAngle && angle <=maxAngle) || counter>=100;
+          inRange= (angle>=minAngle && angle <=maxAngle); 
           inRange=inRange || counter >=100;      
           //Modify stepsize if not inRange.Otherwise keep it.
           stepsize = (inRange) ? stepsize : (angle<minAngle)*stepsize*1.1 +  (angle>maxAngle)*stepsize*0.8;        
