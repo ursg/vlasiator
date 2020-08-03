@@ -812,15 +812,8 @@ namespace SBC {
           //Limit stepsize other wise we might miss a cell
           stepsize = min(stepsize, maxStepsize); 
           counter ++;
-        
-          //printf("Angle = %f \n",angle);
-          //printf("Stepsize = %f \n",stepsize);
-          //printf("Ratio = %f \n",stepsize/100e3);
-          //printf("Ratio2 = %f \n",stepsize/maxStepsize);
-          //printf("Counter= %d \n",counter);
-
-         }
-         //Keep new position along field line
+         
+          //Keep new position along field line
          x=x2;
       };
 
