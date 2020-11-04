@@ -29,8 +29,45 @@
 
 using namespace spatial_cell;
 
-bool map_1d(SpatialCell* spatial_cell, const uint popID,     
+struct Column {
+   int valuesOffset;           // Source data values
+   size_t targetBlockOffsets[MAX_BLOCKS_PER_DIM]; // Target data array offsets
+   int nblocks;                // Number of blocks in this column
+   int minBlockK,maxBlockK;    // Column parallel coordinate limits
+   int kBegin;                 // Actual un-sheared starting block index
+   int i,j;                    // Blocks' perpendicular coordinates
+};
+
+struct AccMappingTask {
+
+   // Velocity space data to copy in
+   size_t valuesSize;
+   Vec* values;
+
+   // Column metadata
+   uint32_t numColumns;
+   Column* columns;
+
+   // Acceleration direction information
+   int cell_indices_to_id[3];
+   
+   // Acceleration amounts
+   Realv intersection;
+   Realv intersection_di, intersection_dj, intersection_dk;
+
+   // Other parameters
+   Realv dv,v_min,minValue;
+
+   // Output data pointer and size
+   size_t blockDataSize;
+   Realf* outputBlockData;
+
+};
+
+AccMappingTask* create_task_map_1d(SpatialCell* spatial_cell, const uint popID,     
             Realv intersection, Realv intersection_di, Realv intersection_dj,Realv intersection_dk,
-            const uint dimension, const bool useAccelerator) ;
+            const uint dimension) ;
+
+bool run_task_map_1d(AccMappingTask& task);
 
 #endif

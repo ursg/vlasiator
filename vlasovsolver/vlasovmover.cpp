@@ -407,7 +407,7 @@ void calculateAcceleration(const uint popID,const uint globalMaxSubcycles,const 
          bool isThreadZero = omp_get_thread_num() == 0;
 
          phiprof::start("cell-semilag-acc");
-         cpu_accelerate_cell(mpiGrid[cellID],popID,map_order,order_step,subcycleDt,isThreadZero);
+         cpu_accelerate_cell(mpiGrid[cellID],popID,map_order,order_step,subcycleDt);
          phiprof::stop("cell-semilag-acc");
       }
       // Wait for all of the async GPU stuff to be done before continuing
