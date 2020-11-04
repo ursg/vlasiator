@@ -51,12 +51,23 @@ struct AccMappingTask {
    // Acceleration direction information
    int cell_indices_to_id[3];
    
+   // Acceleration amounts
+   Realv intersection;
+   Realv intersection_di, intersection_dj, intersection_dk;
+
+   // Other parameters
+   Realv dv,v_min,minValue;
+
+   // Output data pointer and size
    size_t blockDataSize;
-   Realf* targetBlockData;
+   Realf* outputBlockData;
+
 };
 
-bool map_1d(SpatialCell* spatial_cell, const uint popID,     
+AccMappingTask* create_task_map_1d(SpatialCell* spatial_cell, const uint popID,     
             Realv intersection, Realv intersection_di, Realv intersection_dj,Realv intersection_dk,
-            const uint dimension, const bool useAccelerator) ;
+            const uint dimension) ;
+
+bool run_task_map_1d(AccMappingTask& task);
 
 #endif
