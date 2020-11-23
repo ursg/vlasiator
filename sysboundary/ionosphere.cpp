@@ -170,6 +170,7 @@ namespace SBC {
    // after Keinert et al 2015
    void SphericalTriGrid::initializeSphericalFibonacci(int n) {
 
+      phiprof::start("ionosphere-sphericalFibonacci");
       // Golden ratio
       const Real Phi = (sqrt(5) +1.)/2.;
 
@@ -265,6 +266,7 @@ namespace SBC {
       }
 
       updateConnectivity();
+      phiprof::stop("ionosphere-sphericalFibonacci");
    }
 
    // Find the neighbouring element of the one with index e, that is sharing the
@@ -319,6 +321,7 @@ namespace SBC {
    // The new center node (3) replaces the old parent element in place.
    void SphericalTriGrid::subdivideElement(uint32_t e) {
 
+      phiprof::start("ionosphere-subdivideElement");
       Element& parentElement = elements[e];
 
       // 4 new elements
@@ -439,6 +442,7 @@ namespace SBC {
       for(int i=0; i<3; i++) {
          elements.push_back(newElements[i]);
       }
+      phiprof::stop("ionosphere-subdivideElement");
    }
 
 
@@ -457,6 +461,7 @@ namespace SBC {
     */
    void SphericalTriGrid::readAtmosphericModelFile(const char* filename) {
 
+      phiprof::start("ionosphere-readAtmosphericModelFile");
       // These are the only height values (in km) we are actually interested in
       static const float alt[numAtmosphereLevels] = {
          66, 68, 71, 74, 78, 82, 87, 92, 98, 104, 111,
@@ -561,27 +566,7 @@ namespace SBC {
             }
          }
       }
-   }
-
-   /* Calculate the field aligned potential drop between ionosphere and magnetosphere
-    * along the fieldline of the given node */
-   Real SphericalTriGrid::getDeltaPhi(int nodeindex) {
-
-      Real ne = nodes[nodeindex].parameters[ionosphereParameters::RHOM] / physicalconstants::MASS_PROTON;
-      Real fac = nodes[nodeindex].parameters[ionosphereParameters::SOURCE];
-      Real electronTemp = nodes[nodeindex].parameters[ionosphereParameters::PRESSURE] /
-         (ion_electron_T_ratio * physicalconstants::K_B * ne);
-      Real deltaPhi = physicalconstants::K_B * electronTemp / physicalconstants::CHARGE
-         * ((fac / (physicalconstants::CHARGE * ne))
-         * sqrt(2. * M_PI * physicalconstants::MASS_ELECTRON / (physicalconstants::K_B * electronTemp)) - 1.);
-
-      // A positive value means an upward current (i.e. electron precipitation).
-      // A negative value quickly gets neutralized from the atmosphere.
-      if(deltaPhi < 0 || isnan(deltaPhi)) {
-         deltaPhi = 0;
-      }
-
-      return deltaPhi;
+      phiprof::stop("ionosphere-readAtmosphericModelFile");
    }
 
    /* Look up the free electron production rate in the ionosphere, given the atmospheric height index,
@@ -633,6 +618,26 @@ namespace SBC {
 
    }
 
+   /* Estimate the magnetospheric electron precipitation energy flux (in W/m^2) from
+    * mass density, electron temperature and potential difference.
+    *
+    * TODO: This is the coarse MHD estimate, lacking a better approximation. Should this
+    * instead use the precipitation data reducer?
+    */
+   void SphericalTriGrid::calculatePrecipitation() {
+
+      for(uint n=0; n<nodes.size(); n++) {
+         Real ne = nodes[n].electronDensity();
+         Real electronEnergy = nodes[n].electronTemperature() * physicalconstants::K_B;
+         Real potential = nodes[n].deltaPhi();
+
+         nodes[n].parameters[ionosphereParameters::PRECIP] = (ne / sqrt(2. * M_PI * physicalconstants::MASS_ELECTRON * electronEnergy))
+            * (2. * electronEnergy * electronEnergy + 2 * physicalconstants::CHARGE * potential * electronEnergy
+                  + (physicalconstants::CHARGE * potential)*(physicalconstants::CHARGE * potential));
+
+      }
+   }
+
    /* Calculate the conductivity tensor for every grid node, based on the
     * given F10.7 photospheric flux as a solar activity proxy.
     *
@@ -640,8 +645,9 @@ namespace SBC {
     */
    void SphericalTriGrid::calculateConductivityTensor(const Real F10_7, const Real recombAlpha, const Real backgroundIonisation) {
 
+      phiprof::start("ionosphere-calculateConductivityTensor");
 
-      //precipitation()
+      calculatePrecipitation();
 
       //Calculate height-integrated conductivities and 3D electron density
       // TODO: effdt > 0?
@@ -653,15 +659,14 @@ namespace SBC {
 
          for(int h=1; h<numAtmosphereLevels; h++) { // Note this loop counts from 1
             // Calculate production rate
-            Real energy_keV = max(getDeltaPhi(n)/1000., productionMinAccEnergy);
+            Real energy_keV = max(nodes[n].deltaPhi()/1000., productionMinAccEnergy);
 
-            Real ne = nodes[n].parameters[ionosphereParameters::RHOM] / physicalconstants::MASS_PROTON;
-            Real electronTemp = nodes[n].parameters[ionosphereParameters::PRESSURE] /
-               (ion_electron_T_ratio * physicalconstants::K_B * ne);
+            Real ne = nodes[n].electronDensity();
+            Real electronTemp = nodes[n].electronTemperature();
             Real temperature_keV = (physicalconstants::K_B / physicalconstants::CHARGE) / 1000. * electronTemp;
             if(isnan(energy_keV) || isnan(temperature_keV)) {
                logFile << "(ionosphere) NaN encountered in conductivity calculation: " << endl
-                  << "   `-> DeltaPhi     = " << getDeltaPhi(n)/1000. << " keV" << endl
+                  << "   `-> DeltaPhi     = " << nodes[n].deltaPhi()/1000. << " keV" << endl
                   << "   `-> energy_keV   = " << energy_keV << endl
                   << "   `-> ne           = " << ne << " m^-3" << endl
                   << "   `-> electronTemp = " << electronTemp << " K" << endl << write;
@@ -729,6 +734,7 @@ namespace SBC {
             }
          }
       }
+      phiprof::stop("ionosphere-readAtmosphericModelFile");
    }
     
    /*Simple method to tranlate 3D to 1D indeces*/
@@ -945,6 +951,8 @@ namespace SBC {
     */
    void SphericalTriGrid::calculateFsgridCoupling( FsGrid< fsgrids::technical, 2> & technicalGrid, FieldFunction& dipole, Real couplingRadius) {
 
+      phiprof::start("ionosphere-calculateCoupling");
+      logFile << "(ionosphere) Starting FsGrid coupling of " << nodes.size() << " nodes." << endl << write;
       // Pick an initial stepsize
       Real stepSize = min(100e3, technicalGrid.DX / 2.); 
 
@@ -980,7 +988,7 @@ namespace SBC {
                   break;
                }
 
-               // Not inside the local domain, skip and continue.
+               // Not inside the local fsgrid domain, skip and continue.
                if(fsgridCell[0] == -1) {
                   continue;
                }
@@ -1011,13 +1019,24 @@ namespace SBC {
 
       // Now generate the subcommunicator to solve the ionosphere only on those ranks that actually couple
       // to simulation cells
+      int writingRankInput=0;
       if(isCouplingToCells) {
+        int size;
         MPI_Comm_split(MPI_COMM_WORLD, 1, technicalGrid.getRank(), &communicator);
-        rank = MPI_Comm_rank(communicator, &rank);
+        MPI_Comm_rank(communicator, &rank);
+        MPI_Comm_size(communicator, &size);
+        if(rank == 0) {
+          writingRankInput = technicalGrid.getRank();
+          cerr << "(ionosphere) Ionosphere Subcommunicator has size " << size << ", rank 0 corresponds to global rank " << technicalGrid.getRank() << endl;
+        }
       } else {
         MPI_Comm_split(MPI_COMM_WORLD, MPI_UNDEFINED, 0, &communicator); // All other ranks are staying out of the communicator.
         rank = -1;
       }
+
+      // Make sure all tasks know which task does the writing
+      MPI_Allreduce(&writingRankInput, &writingRank, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+      phiprof::stop("ionosphere-calculateCoupling");
    }
 
    // Transport field-aligned currents down from the simulation cells to the ionosphere
@@ -1032,6 +1051,7 @@ namespace SBC {
      if(!isCouplingToCells) {
        return;
      }
+     phiprof::start("ionosphere-mapDownMagnetosphere");
 
      // Create zeroed-out input arrays
      std::vector<double> FACinput(nodes.size());
@@ -1115,7 +1135,7 @@ namespace SBC {
         area /= 3.;
         upmappedArea /= 3.;
 
-		  //// Map down FAC based on magnetosphere rotB
+        //// Map down FAC based on magnetosphere rotB
         //std::array<int,3> fsc;
         std::array<Real,3> cell = nodes[n].fsgridCellCoupling;
         for(int c=0; c<3; c++) {
@@ -1171,11 +1191,12 @@ namespace SBC {
 
                  Real coupling = abs(xoffset - (cell[0]-fsc[0])) * abs(yoffset - (cell[1]-fsc[1])) * abs(zoffset - (cell[2]-fsc[2]));
                  if(coupling < 0. || coupling > 1.) {
-                   logFile << "Noot noot!" << endl << write;
+                   logFile << "Ionosphere warning: node << " << n << " has coupling value " << coupling <<
+                      ", which is outside [0,1] at line " << __LINE__ << "!" << endl << write;
                  }
 
                  if(technicalGrid.get(lfsc[0]+xoffset,lfsc[1]+yoffset,lfsc[2]+zoffset)->sysBoundaryFlag == sysboundarytype::NOT_SYSBOUNDARY) {
-                    rhoInput[n] += coupling * momentsGrid.get(lfsc[0]+xoffset,lfsc[1]+yoffset,lfsc[2]+zoffset)->at(fsgrids::RHOM);
+                    rhoInput[n] += coupling * momentsGrid.get(lfsc[0]+xoffset,lfsc[1]+yoffset,lfsc[2]+zoffset)->at(fsgrids::RHOQ) / physicalconstants::CHARGE;
                     pressureInput[n] += coupling * (
                           momentsGrid.get(lfsc[0]+xoffset,lfsc[1]+yoffset,lfsc[2]+zoffset)->at(fsgrids::P_11) +
                           momentsGrid.get(lfsc[0]+xoffset,lfsc[1]+yoffset,lfsc[2]+zoffset)->at(fsgrids::P_22) +
@@ -1203,18 +1224,19 @@ namespace SBC {
         if(rhoSum[n] == 0 || pressureSum[n] == 0) {
            // Node couples nowhere. Assume some default values.
            nodes[n].parameters[ionosphereParameters::SOURCE] = 0;
-           nodes[n].parameters[ionosphereParameters::RHOM] = 1e6 * physicalconstants::MASS_PROTON;
+           nodes[n].parameters[ionosphereParameters::RHON] = 1e6; // TODO: shouldn't this be density 0?
            nodes[n].parameters[ionosphereParameters::PRESSURE] = 2.76131e-10; // This pressure value results in an electron temp of 5e6 K
         } else {
            // Store as the node's parameter values.
            nodes[n].parameters[ionosphereParameters::SOURCE] = FACsum[n];
-           nodes[n].parameters[ionosphereParameters::RHOM] = rhoSum[n];
+           nodes[n].parameters[ionosphereParameters::RHON] = rhoSum[n];
            nodes[n].parameters[ionosphereParameters::PRESSURE] = pressureSum[n];
         }
      }
 
      // Make sure FACs are balanced, so that the potential doesn't start to drift
      offset_FAC();
+     phiprof::stop("ionosphere-mapDownMagnetosphere");
 
    }
 
@@ -1399,6 +1421,7 @@ namespace SBC {
    // Initialize the CG sover by assigning matrix dependency weights
    void SphericalTriGrid::initSolver(bool zeroOut) {
 
+     phiprof::start("ionosphere-initSolver");
      // Zero out parameters
      if(zeroOut) {
         for(uint n=0; n<nodes.size(); n++) {
@@ -1421,6 +1444,7 @@ namespace SBC {
      for(uint n=0; n<nodes.size(); n++) {
        addAllMatrixDependencies(n);
      }
+     phiprof::stop("ionosphere-initSolver");
    }
 
    // Evaluate a nodes' neighbour parameter, averaged through the coupling
@@ -1459,7 +1483,8 @@ namespace SBC {
      if(!isCouplingToCells) {
        return;
      }
-
+     phiprof::start("ionosphere-solve");
+ 
      initSolver(false);
 
      int rank;
@@ -1483,7 +1508,6 @@ namespace SBC {
      // Abort if there is nothing to solve.
      if(sourcenorm == 0) {
        if(rank == 0) {
-          logFile << "(ionosphere) nothing to solve, skipping. " << endl << write;
        }
        return;
      }
@@ -1573,6 +1597,7 @@ namespace SBC {
          //if(rank == 0) {
          //  cerr << "Solved ionosphere potential after " << iteration << " iterations." << endl;
          //}
+         phiprof::stop("ionosphere-solve");
          return;
        }
 
@@ -1585,6 +1610,7 @@ namespace SBC {
          N.parameters[ionosphereParameters::SOLUTION] = N.parameters[ionosphereParameters::BEST_SOLUTION];
        }
      }
+     phiprof::stop("ionosphere-solve");
    }
 
    // Actual ionosphere object implementation

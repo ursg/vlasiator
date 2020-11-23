@@ -282,7 +282,7 @@ void recalculateLocalCellsCache() {
 
 int main(int argn,char* args[]) {
    bool success = true;
-   int myRank, doBailout;
+   int myRank, doBailout=0;
    const creal DT_EPSILON=1e-12;
    typedef Parameters P;
    Real newDt;
