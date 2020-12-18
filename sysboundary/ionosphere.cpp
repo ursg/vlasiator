@@ -179,7 +179,7 @@ namespace SBC {
       };
 
       // Forward spherical fibonacci mapping with n points
-      auto SF = [madfrac,Phi](int i, int n) -> Vec3d {
+      auto SF = [madfrac,Phi](int i, int n) -> Vec3Df {
          Real phi = 2*M_PI*madfrac(i, Phi-1.);
          Real z = 1. - (2.*i +1.)/n;
          Real sinTheta = sqrt(1 - z*z);
@@ -193,7 +193,7 @@ namespace SBC {
          Real cosTheta = 1. - (2.*j+1.)/n;
          Real z = max(0., round(0.5*log(n * M_PI * sqrt(5) * (1.-cosTheta*cosTheta)) / log(Phi)));
 
-         Vec3d nearestSample = SF(j,n);
+         Vec3Df nearestSample = SF(j,n);
          std::vector<int> nearestSamples;
 
          // Sample neighbourhood to find closest neighbours
@@ -203,8 +203,8 @@ namespace SBC {
             int c = 5 - abs(5 - r*2) + floor((int)r/3);
             int k = j + (i < 6 ? +1 : -1) * (int)round(pow(Phi,z+c-2)/sqrt(5.));
 
-            Vec3d currentSample = SF(k,n);
-            Vec3d nearestToCurrentSample = currentSample - nearestSample;
+            Vec3Df currentSample = SF(k,n);
+            Vec3Df nearestToCurrentSample = currentSample - nearestSample;
             Real squaredDistance = dot_product(nearestToCurrentSample,nearestToCurrentSample);
 
             // Early reject by invalid index and distance
@@ -223,9 +223,9 @@ namespace SBC {
             int kPrevious = nearestSamples[(i+nearestSamples.size()-1) % nearestSamples.size()];
             int kNext = nearestSamples[(i+1) % nearestSamples.size()];
 
-            Vec3d currentSample = SF(k,n);
-            Vec3d previousSample = SF(kPrevious, n);
-            Vec3d nextSample = SF(kNext,n);
+            Vec3Df currentSample = SF(k,n);
+            Vec3Df previousSample = SF(kPrevious, n);
+            Vec3Df nextSample = SF(kNext,n);
 
             if(dot_product(previousSample - nextSample, previousSample - nextSample) > dot_product(currentSample - nearestSample, currentSample-nearestSample)) {
                adjacentVertices.push_back(nearestSamples[i]);
@@ -244,7 +244,7 @@ namespace SBC {
       for(int i=0; i< n; i++) {
          Node newNode;
 
-         Vec3d pos = SF(i,n);
+         Vec3Df pos = SF(i,n);
          newNode.x = {pos[0], pos[1], pos[2]};
          normalizeRadius(newNode, Ionosphere::innerRadius);
 
@@ -825,8 +825,8 @@ namespace SBC {
    void SphericalTriGrid::bulirschStoerStep(FieldFunction& dipole, std::array<Real, 3>& r, std::array<Real, 3>& b, Real& stepsize,Real maxStepsize){
       
       //Factors by which the stepsize is multiplied 
-      Real shrink = 0.92;
-      Real grow = 1.25; 
+      Real shrink = 0.95;
+      Real grow = 1.2; 
       //Max substeps for midpoint method
       int kMax = 12;
       //Optimal row to converge
@@ -878,13 +878,14 @@ namespace SBC {
 
       //Step control
       i = (converged) ? i:i-1;
-      if  (error>=1.  || i>kOpt){
-         stepsize*=shrink;
+      
+      if  (error>=1.){
+         stepsize*=0.25;
        }else if (i<kOpt){
          stepsize*=grow;
-         //Limit stepsize to maxStepsize which should be technicalGrid.DX/2
-         stepsize= (stepsize<maxStepsize )?stepsize:maxStepsize; 
-      }else{
+       }else if (i==kOpt+1){
+         stepsize*=shrink;
+      }else if (i==kOpt){
          //Save values in table
          for(int c =0; c<3; ++c){
             r[c]=table.at(ijk2Index(i,i,c,dims));
@@ -892,7 +893,9 @@ namespace SBC {
          //And also save B unit vector here
          getOutwardBfieldDirection(dipole,r,b);
 
-      }
+         
+       }else {
+         stepsize*=1.0/i;}
    } //Bulirsch-Stoer Step 
 
    
@@ -985,6 +988,7 @@ namespace SBC {
                // If the field line is no longer moving outwards but tangentially (88 degrees), abort.
                // (Note that v is normalized)
                if(fabs(x[0]*v[0]+x[1]*v[1]+x[2]*v[2])/sqrt(x[0]*x[0]+x[1]*x[1]+x[2]*x[2]) < cos(88. / 180. * M_PI)) {
+                  std::cout<<"break"<<std::endl;
                   break;
                }
 
@@ -1011,6 +1015,7 @@ namespace SBC {
                      no.fsgridCellCoupling[c] = (x[c] - technicalGrid.physicalGlobalStart[c]) / technicalGrid.DX;
                   }
 
+                  std::cout<<"found"<<std::endl;
                   break;
                }
             }
@@ -1246,13 +1251,13 @@ namespace SBC {
                                        const std::array<Real, 3>& b,
                                        const std::array<Real, 3>& c) {
 
-     Vec3d av(a[0],a[1],a[2]);
-     Vec3d bv(b[0],b[1],b[2]);
-     Vec3d cv(c[0],c[1],c[2]);
+     Vec3Df av(a[0],a[1],a[2]);
+     Vec3Df bv(b[0],b[1],b[2]);
+     Vec3Df cv(c[0],c[1],c[2]);
 
-     Vec3d z = cross_product(bv-cv, av-cv);
+     Vec3Df z = cross_product(bv-cv, av-cv);
 
-     Vec3d result = cross_product(z,bv-av)/dot_product( z, cross_product(av,bv) + cross_product(cv, av-bv));
+     Vec3Df result = cross_product(z,bv-av)/dot_product( z, cross_product(av,bv) + cross_product(cv, av-bv));
 
      return std::array<Real,3>{result[0],result[1],result[2]};
    }
