@@ -778,7 +778,7 @@ bool readCellParamsVariable(
 }
 
 template<unsigned long int N> bool readFsGridVariable(
-   vlsv::ParallelReader& file, const string& variableName, int numWritingRanks, FsGrid<std::array<Real, N>,2>& targetGrid) {
+   vlsv::ParallelReader& file, const string& variableName, int numWritingRanks, FsGrid<std::array<Real, N>,FS_STENCIL_WIDTH> & targetGrid) {
 
    uint64_t arraySize;
    uint64_t vectorSize;
@@ -790,7 +790,6 @@ template<unsigned long int N> bool readFsGridVariable(
    attribs.push_back(make_pair("name",variableName));
    attribs.push_back(make_pair("mesh","fsgrid"));
 
-   logFile << "     `-> Getting Array Info.." << endl << write;
    if (file.getArrayInfo("VARIABLE",attribs,arraySize,vectorSize,dataType,byteSize) == false) {
       logFile << "(RESTART)  ERROR: Failed to read " << endl << write;
       return false;
@@ -812,9 +811,7 @@ template<unsigned long int N> bool readFsGridVariable(
    // Determine our tasks storage size
    size_t storageSize = localSize[0]*localSize[1]*localSize[2];
 
-   logFile << "     `-> Reading on " << size << " ranks, dataset was written on " << numWritingRanks << "..." << endl << write;
    if(size == numWritingRanks) {
-      logFile << "     `-> Easy case. Sluping!" << endl << write;
       // Easy case: same number of tasks => slurp it in.
       //
       std::array<int,3> decomposition;
@@ -866,7 +863,6 @@ template<unsigned long int N> bool readFsGridVariable(
       
    } else {
 
-      logFile << "     `-> Difficult case. Mapping!" << endl << write;
       // More difficult case: different number of tasks.
       // In this case, our own fsgrid domain overlaps (potentially many) domains in the file.
       // We read the whole source rank into a temporary buffer, and transfer the overlapping
@@ -893,9 +889,6 @@ template<unsigned long int N> bool readFsGridVariable(
       // Iterate through tasks and find their overlap with our domain.
       size_t fileOffset = 0;
       for(int task = 0; task < numWritingRanks; task++) {
-	 if(!(task % 10)) {
-		 logFile << "     `-> Reading data of task " << task << "..." << endl << write;
-	 }
          std::array<int32_t,3> thatTasksSize;
          std::array<int32_t,3> thatTasksStart;
          thatTasksSize[0] = targetGrid.calcLocalSize(globalSize[0], fileDecomposition[0], task/fileDecomposition[2]/fileDecomposition[1]);
@@ -923,6 +916,7 @@ template<unsigned long int N> bool readFsGridVariable(
          // Read into buffer
          std::vector<Real> buffer(thatTasksSize[0]*thatTasksSize[1]*thatTasksSize[2]*N);
 
+         phiprof::start("readArray");
          if(!convertFloatType) {
             // TODO: Should these be multireads instead? And/or can this be parallelized?
             if(file.readArray("VARIABLE",attribs, fileOffset, thatTasksSize[0]*thatTasksSize[1]*thatTasksSize[2], (char*)buffer.data()) == false) {
@@ -1017,9 +1011,9 @@ bool checkScalarParameter(vlsv::ParallelReader& file,const string& name,T correc
  \sa readGrid
  */
 bool exec_readGrid(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
-      FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, 2>& perBGrid,
-      FsGrid< std::array<Real, fsgrids::efield::N_EFIELD>, 2>& EGrid,
-      FsGrid< fsgrids::technical, 2>& technicalGrid,
+      FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, FS_STENCIL_WIDTH> & perBGrid,
+      FsGrid< std::array<Real, fsgrids::efield::N_EFIELD>, FS_STENCIL_WIDTH> & EGrid,
+      FsGrid< fsgrids::technical, FS_STENCIL_WIDTH> & technicalGrid,
                    const std::string& name) {
    vector<CellID> fileCells; /*< CellIds for all cells in file*/
    vector<size_t> nBlocks;/*< Number of blocks for all cells in file*/
@@ -1213,28 +1207,23 @@ bool exec_readGrid(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
    phiprof::stop("readBlockData");
 
    phiprof::start("updateMpiGridNeighbors");
-   logFile << " - remote update... " << endl << write;
    mpiGrid.update_copies_of_remote_neighbors(FULL_NEIGHBORHOOD_ID);
    phiprof::stop("updateMpiGridNeighbors");
    
    phiprof::start("readFsGrid");
    // Read fsgrid data back in
    int fsgridInputRanks=0;
-   logFile << " - read fsgrids... " << endl << write;
    if(readScalarParameter(file,"numWritingRanks",fsgridInputRanks, MASTER_RANK, MPI_COMM_WORLD) == false) {
       exitOnError(false, "(RESTART) FSGrid writing rank number not found in restart file", MPI_COMM_WORLD);
    }
    
-   logFile << "   `->fg_PERB " << endl << write;
    if(success) { success = readFsGridVariable(file, "fg_PERB", fsgridInputRanks, perBGrid); }
-   logFile << "   `->fg_E " << endl << write;
    if(success) { success = readFsGridVariable(file, "fg_E", fsgridInputRanks, EGrid); }
    exitOnError(success,"(RESTART) Failure reading fsgrid restart variables",MPI_COMM_WORLD);
    phiprof::stop("readFsGrid");
    
    success = file.close();
    phiprof::stop("readGrid");
-   logFile << " - read complete." << endl << write;
 
    exitOnError(success,"(RESTART) Other failure",MPI_COMM_WORLD);
    return success;
@@ -1247,9 +1236,9 @@ bool exec_readGrid(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
 \param name Name of the restart file e.g. "restart.00052.vlsv"
 */
 bool readGrid(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
-      FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, 2>& perBGrid,
-      FsGrid< std::array<Real, fsgrids::efield::N_EFIELD>, 2>& EGrid,
-      FsGrid< fsgrids::technical, 2>& technicalGrid,
+      FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, FS_STENCIL_WIDTH> & perBGrid,
+      FsGrid< std::array<Real, fsgrids::efield::N_EFIELD>, FS_STENCIL_WIDTH> & EGrid,
+      FsGrid< fsgrids::technical, FS_STENCIL_WIDTH> & technicalGrid,
               const std::string& name){
    //Check the vlsv version from the file:
    return exec_readGrid(mpiGrid,perBGrid,EGrid,technicalGrid,name);

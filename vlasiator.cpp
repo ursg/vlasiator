@@ -92,7 +92,7 @@ void addTimedBarrier(string name){
 }
 
 bool computeNewTimeStep(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
-			FsGrid< fsgrids::technical, 2>& technicalGrid, Real &newDt, bool &isChanged) {
+			FsGrid< fsgrids::technical, FS_STENCIL_WIDTH> & technicalGrid, Real &newDt, bool &isChanged) {
    
    phiprof::start("compute-timestep");
    //compute maximum time-step, this cannot be done at the first
@@ -401,19 +401,19 @@ int main(int argn,char* args[]) {
                                   sysBoundaries.isBoundaryPeriodic(2)};
    
    FsGridCouplingInformation gridCoupling;
-   FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, 2> perBGrid(fsGridDimensions, comm, periodicity,gridCoupling);
-   FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, 2> perBDt2Grid(fsGridDimensions, comm, periodicity,gridCoupling);
-   FsGrid< std::array<Real, fsgrids::efield::N_EFIELD>, 2> EGrid(fsGridDimensions, comm, periodicity,gridCoupling);
-   FsGrid< std::array<Real, fsgrids::efield::N_EFIELD>, 2> EDt2Grid(fsGridDimensions, comm, periodicity,gridCoupling);
-   FsGrid< std::array<Real, fsgrids::ehall::N_EHALL>, 2> EHallGrid(fsGridDimensions, comm, periodicity,gridCoupling);
-   FsGrid< std::array<Real, fsgrids::egradpe::N_EGRADPE>, 2> EGradPeGrid(fsGridDimensions, comm, periodicity,gridCoupling);
-   FsGrid< std::array<Real, fsgrids::moments::N_MOMENTS>, 2> momentsGrid(fsGridDimensions, comm, periodicity,gridCoupling);
-   FsGrid< std::array<Real, fsgrids::moments::N_MOMENTS>, 2> momentsDt2Grid(fsGridDimensions, comm, periodicity,gridCoupling);
-   FsGrid< std::array<Real, fsgrids::dperb::N_DPERB>, 2> dPerBGrid(fsGridDimensions, comm, periodicity,gridCoupling);
-   FsGrid< std::array<Real, fsgrids::dmoments::N_DMOMENTS>, 2> dMomentsGrid(fsGridDimensions, comm, periodicity,gridCoupling);
-   FsGrid< std::array<Real, fsgrids::bgbfield::N_BGB>, 2> BgBGrid(fsGridDimensions, comm, periodicity,gridCoupling);
-   FsGrid< std::array<Real, fsgrids::volfields::N_VOL>, 2> volGrid(fsGridDimensions, comm, periodicity,gridCoupling);
-   FsGrid< fsgrids::technical, 2> technicalGrid(fsGridDimensions, comm, periodicity,gridCoupling);
+   FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, FS_STENCIL_WIDTH> perBGrid(fsGridDimensions, comm, periodicity,gridCoupling);
+   FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, FS_STENCIL_WIDTH> perBDt2Grid(fsGridDimensions, comm, periodicity,gridCoupling);
+   FsGrid< std::array<Real, fsgrids::efield::N_EFIELD>, FS_STENCIL_WIDTH> EGrid(fsGridDimensions, comm, periodicity,gridCoupling);
+   FsGrid< std::array<Real, fsgrids::efield::N_EFIELD>, FS_STENCIL_WIDTH> EDt2Grid(fsGridDimensions, comm, periodicity,gridCoupling);
+   FsGrid< std::array<Real, fsgrids::ehall::N_EHALL>, FS_STENCIL_WIDTH> EHallGrid(fsGridDimensions, comm, periodicity,gridCoupling);
+   FsGrid< std::array<Real, fsgrids::egradpe::N_EGRADPE>, FS_STENCIL_WIDTH> EGradPeGrid(fsGridDimensions, comm, periodicity,gridCoupling);
+   FsGrid< std::array<Real, fsgrids::moments::N_MOMENTS>, FS_STENCIL_WIDTH> momentsGrid(fsGridDimensions, comm, periodicity,gridCoupling);
+   FsGrid< std::array<Real, fsgrids::moments::N_MOMENTS>, FS_STENCIL_WIDTH> momentsDt2Grid(fsGridDimensions, comm, periodicity,gridCoupling);
+   FsGrid< std::array<Real, fsgrids::dperb::N_DPERB>, FS_STENCIL_WIDTH> dPerBGrid(fsGridDimensions, comm, periodicity,gridCoupling);
+   FsGrid< std::array<Real, fsgrids::dmoments::N_DMOMENTS>, FS_STENCIL_WIDTH> dMomentsGrid(fsGridDimensions, comm, periodicity,gridCoupling);
+   FsGrid< std::array<Real, fsgrids::bgbfield::N_BGB>, FS_STENCIL_WIDTH> BgBGrid(fsGridDimensions, comm, periodicity,gridCoupling);
+   FsGrid< std::array<Real, fsgrids::volfields::N_VOL>, FS_STENCIL_WIDTH> volGrid(fsGridDimensions, comm, periodicity,gridCoupling);
+   FsGrid< fsgrids::technical, FS_STENCIL_WIDTH> technicalGrid(fsGridDimensions, comm, periodicity,gridCoupling);
 
    // Set DX,DY and DZ
    // TODO: This is currently just taking the values from cell 1, and assuming them to be
@@ -542,7 +542,7 @@ int main(int argn,char* args[]) {
             BgBGrid,
             volGrid,
             technicalGrid,
-            &outputReducer,P::systemWriteName.size()-1, writeGhosts) == false ) {
+            &outputReducer,P::systemWriteName.size()-1, P::restartStripeFactor, writeGhosts) == false ) {
          cerr << "FAILED TO WRITE GRID AT " << __FILE__ << " " << __LINE__ << endl;
       }
 
@@ -578,6 +578,9 @@ int main(int argn,char* args[]) {
       phiprof::stop("propagate-velocity-space-dt/2");
 
    }
+
+   // Build communicator for ionosphere solving
+   SBC::ionosphereGrid.updateIonosphereCommunicator(mpiGrid, technicalGrid);
    
    phiprof::stop("Initialization");
 
@@ -602,8 +605,12 @@ int main(int argn,char* args[]) {
       //is requested for writing, then jump to next writing index. This is to
       //make sure that at restart we do not write in the middle of
       //the interval.
-      if(P::t_min>(index+0.01)*P::systemWriteTimeInterval[i])
+      if(P::t_min>(index+0.01)*P::systemWriteTimeInterval[i]) {
          index++;
+         // Special case for large timesteps
+         int index2=(int)((P::t_min+P::dt)/P::systemWriteTimeInterval[i]);
+         if (index2>index) index=index2;
+      }
       P::systemWrites.push_back(index);
    }
 
@@ -683,6 +690,14 @@ int main(int argn,char* args[]) {
       for (uint i = 0; i < P::systemWriteTimeInterval.size(); i++) {
          if (P::systemWriteTimeInterval[i] >= 0.0 &&
              P::t >= P::systemWrites[i] * P::systemWriteTimeInterval[i] - DT_EPSILON) {
+            // If we have only just restarted, the bulk file should already exist from the previous slot.
+            if ((P::tstep == P::tstep_min) && (P::tstep>0)) {
+               P::systemWrites[i]++;
+               // Special case for large timesteps
+               int index2=(int)((P::t+P::dt)/P::systemWriteTimeInterval[i]);
+               if (index2>P::systemWrites[i]) P::systemWrites[i]=index2;
+               continue;
+            }
             
             phiprof::start("write-system");
             logFile << "(IO): Writing spatial cell and reduced system data to disk, tstep = " << P::tstep << " t = " << P::t << endl << writeVerbose;
@@ -698,10 +713,13 @@ int main(int argn,char* args[]) {
                      BgBGrid,
                      volGrid,
                      technicalGrid,
-                     &outputReducer, i, writeGhosts) == false ) {
+                     &outputReducer, i, P::bulkStripeFactor, writeGhosts) == false ) {
                cerr << "FAILED TO WRITE GRID AT" << __FILE__ << " " << __LINE__ << endl;
             }
             P::systemWrites[i]++;
+            // Special case for large timesteps
+            int index2=(int)((P::t+P::dt)/P::systemWriteTimeInterval[i]);
+            if (index2>P::systemWrites[i]) P::systemWrites[i]=index2;
             logFile << "(IO): .... done!" << endl << writeVerbose;
             phiprof::stop("write-system");
          }
@@ -766,7 +784,7 @@ int main(int argn,char* args[]) {
                   BgBGrid,
                   volGrid,
                   technicalGrid,
-                  outputReducer,"restart",(uint)P::t, P::restartStripeFactor) == false ) {
+                  outputReducer,"restart",(uint)P::t,P::restartStripeFactor) == false ) {
             logFile << "(IO): ERROR Failed to write restart!" << endl << writeVerbose;
             cerr << "FAILED TO WRITE RESTART" << endl;
          }
@@ -800,6 +818,10 @@ int main(int argn,char* args[]) {
          P::prepareForRebalance = false;
 
          overrideRebalanceNow = false;
+
+         // Make sure the ionosphere communicator is up-to-date, in case inner boundary cells
+         // moved.
+         SBC::ionosphereGrid.updateIonosphereCommunicator(mpiGrid, technicalGrid);
       }
       
       //get local cells

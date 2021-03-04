@@ -136,31 +136,43 @@ namespace SBC {
       std::array< std::array< std::array< Real, productionNumTemperatures >, productionNumAccEnergies >, numAtmosphereLevels > productionTable;
       Real lookupProductionValue(int heightindex, Real energy_keV, Real temperature_keV);
 
-      MPI_Comm communicator;              // The communicator internally used to solve
+      MPI_Comm communicator = MPI_COMM_NULL; // The communicator internally used to solve the ionosphere potenital
       int rank = -1;                      // Own rank in the ionosphere communicator
       int writingRank;                    // Rank in the MPI_COMM_WORLD communicator that does ionosphere I/O
-      bool isCouplingToCells;             // True for any rank that actually couples to the outer simulation
+      bool isCouplingInwards = false;     // True for any rank that actually couples fsgrid information into the ionosphere
+      bool isCouplingOutwards = false;    // True for any rank that actually couples ionosphere potential information out to the vlasov grid
+      FieldFunction* dipoleField;         // Simulation background field model to trace connections with
+      std::map< std::array<Real, 3>, std::array<
+         std::pair<int, Real>, 3> > vlasovGridCoupling; // Grid coupling information, caching how vlasovGrid coordinate couple to ionosphere data
 
+      template<class C> void setDipoleField(C& dipole) {
+         // Create a copy of the dipole and store it locally.
+         dipoleField = new C(dipole);
+      };
       void readAtmosphericModelFile(const char* filename);
       void offset_FAC();                  // Offset field aligned currents to get overall zero current
       void normalizeRadius(Node& n, Real R); // Scale all coordinates onto sphere with radius R
       void updateConnectivity();          // Re-link elements and nodes
+      void updateIonosphereCommunicator(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid, FsGrid< fsgrids::technical, 2> & technicalGrid);// (Re-)create the subcommunicator for ionosphere-internal communication
       void initializeTetrahedron();       // Initialize grid as a base tetrahedron
       void initializeIcosahedron();       // Initialize grid as a base icosahedron
       void initializeSphericalFibonacci(int n); // Initialize grid as a spherical fibonacci lattice
       int32_t findElementNeighbour(uint32_t e, int n1, int n2);
+      uint32_t findNodeAtCoordinates(std::array<Real,3> x); // Find the mesh node closest to the given coordinate
       void subdivideElement(uint32_t e);  // Subdivide mesh within element e
       void calculatePrecipitation(); // Estimate precipitation flux
       void calculateConductivityTensor(const Real F10_7, const Real recombAlpha, const Real backgroundIonisation); // Update sigma tensor
-      void calculateFsgridCoupling(FsGrid< fsgrids::technical, 2> & technicalGrid, FieldFunction& dipole, Real radius);     // Link each element to fsgrid cells for coupling
+      void calculateFsgridCoupling(FsGrid< fsgrids::technical, 2> & technicalGrid, Real radius);     // Link each element to fsgrid cells for coupling
+      Real interpolateUpmappedPotential(const std::array<Real, 3>& x); // Calculate upmapped potential at the given point
+      std::array<std::pair<int, Real>, 3> calculateVlasovGridCoupling(std::array<Real,3> x, Real couplingRadius); // Find coupled ionosphere mesh node for given location
       //Field Line Tracing functions
       int ijk2Index(int i , int j ,int k ,std::array<int,3>dims); //3D to 1D indexing 
-      void getOutwardBfieldDirection(FieldFunction& dipole ,std::array<Real,3>& r,std::array<Real,3>& b);
-      void bulirschStoerStep(FieldFunction& dipole, std::array<Real, 3>& r, std::array<Real, 3>& b, Real& stepsize,Real maxStepsize); //Bulrisch Stoer step
-      void eulerStep(FieldFunction& dipole, std::array<Real, 3>& x, std::array<Real, 3>& v, Real& stepsize); //Euler step
-      void modifiedMidpointMethod(FieldFunction& dipole,std::array<Real,3> r,std::array<Real,3>& r1 , Real n , Real stepsize); // Modified Midpoint Method used by BS step
+      void getRadialBfieldDirection(std::array<Real,3>& r, bool outwards, std::array<Real,3>& b);
+      void bulirschStoerStep(std::array<Real, 3>& r, std::array<Real, 3>& b, Real& stepsize,Real maxStepsize, bool outwards=true); //Bulrisch Stoer step
+      void eulerStep(std::array<Real, 3>& x, std::array<Real, 3>& v, Real& stepsize, bool outwards=true); //Euler step
+      void modifiedMidpointMethod(std::array<Real,3> r,std::array<Real,3>& r1 , Real n , Real stepsize, bool outwards=true); // Modified Midpoint Method used by BS step
       void richardsonExtrapolation(int i, std::vector<Real>& table , Real& maxError,std::array<int,3>dims ); //Richardson extrapolation method used by BS step
-      void stepFieldLine(std::array<Real, 3>& x, std::array<Real, 3>& v, FieldFunction& dipole, Real& stepsize,Real maxStepsize,IonosphereCouplingMethod method); // Handler function for field line tracing
+      void stepFieldLine(std::array<Real, 3>& x, std::array<Real, 3>& v, Real& stepsize, Real maxStepsize, IonosphereCouplingMethod method,bool outwards=true); // Handler function for field line tracing
       // Conjugate Gradient solver functions
       void addMatrixDependency(uint node1, uint node2, Real coeff, bool transposed=false); // Add matrix value for the solver
       void addAllMatrixDependencies(uint nodeIndex);
@@ -264,15 +276,15 @@ namespace SBC {
          Project &project
       );
       virtual bool assignSysBoundary(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
-                                     FsGrid< fsgrids::technical, 2> & technicalGrid);
+                                     FsGrid< fsgrids::technical, FS_STENCIL_WIDTH> & technicalGrid);
       virtual bool applyInitialState(
          const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
-         FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, 2> & perBGrid,
+         FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, FS_STENCIL_WIDTH> & perBGrid,
          Project &project
       );
       virtual Real fieldSolverBoundaryCondMagneticField(
-         FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, 2> & bGrid,
-         FsGrid< fsgrids::technical, 2> & technicalGrid,
+         FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, FS_STENCIL_WIDTH> & bGrid,
+         FsGrid< fsgrids::technical, FS_STENCIL_WIDTH> & technicalGrid,
          cint i,
          cint j,
          cint k,
@@ -280,29 +292,29 @@ namespace SBC {
          cuint& component
       );
       virtual void fieldSolverBoundaryCondElectricField(
-         FsGrid< std::array<Real, fsgrids::efield::N_EFIELD>, 2> & EGrid,
+         FsGrid< std::array<Real, fsgrids::efield::N_EFIELD>, FS_STENCIL_WIDTH> & EGrid,
          cint i,
          cint j,
          cint k,
          cuint component
       );
       virtual void fieldSolverBoundaryCondHallElectricField(
-         FsGrid< std::array<Real, fsgrids::ehall::N_EHALL>, 2> & EHallGrid,
+         FsGrid< std::array<Real, fsgrids::ehall::N_EHALL>, FS_STENCIL_WIDTH> & EHallGrid,
          cint i,
          cint j,
          cint k,
          cuint component
       );
       virtual void fieldSolverBoundaryCondGradPeElectricField(
-         FsGrid< std::array<Real, fsgrids::egradpe::N_EGRADPE>, 2> & EGradPeGrid,
+         FsGrid< std::array<Real, fsgrids::egradpe::N_EGRADPE>, FS_STENCIL_WIDTH> & EGradPeGrid,
          cint i,
          cint j,
          cint k,
          cuint component
       );
       virtual void fieldSolverBoundaryCondDerivatives(
-         FsGrid< std::array<Real, fsgrids::dperb::N_DPERB>, 2> & dPerBGrid,
-         FsGrid< std::array<Real, fsgrids::dmoments::N_DMOMENTS>, 2> & dMomentsGrid,
+         FsGrid< std::array<Real, fsgrids::dperb::N_DPERB>, FS_STENCIL_WIDTH> & dPerBGrid,
+         FsGrid< std::array<Real, fsgrids::dmoments::N_DMOMENTS>, FS_STENCIL_WIDTH> & dMomentsGrid,
          cint i,
          cint j,
          cint k,
@@ -310,7 +322,7 @@ namespace SBC {
          cuint& component
       );
       virtual void fieldSolverBoundaryCondBVOLDerivatives(
-         FsGrid< std::array<Real, fsgrids::volfields::N_VOL>, 2> & volGrid,
+         FsGrid< std::array<Real, fsgrids::volfields::N_VOL>, FS_STENCIL_WIDTH> & volGrid,
          cint i,
          cint j,
          cint k,
@@ -344,7 +356,7 @@ namespace SBC {
       );
       
       std::array<Real, 3> fieldSolverGetNormalDirection(
-         FsGrid< fsgrids::technical, 2> & technicalGrid,
+         FsGrid< fsgrids::technical, FS_STENCIL_WIDTH> & technicalGrid,
          cint i,
          cint j,
          cint k

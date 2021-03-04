@@ -131,16 +131,16 @@ namespace DRO {
    }
    
    bool DataReductionOperatorFsGrid::writeFsGridData(
-                      FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, 2>& perBGrid,
-                      FsGrid< std::array<Real, fsgrids::efield::N_EFIELD>, 2>& EGrid,
-                      FsGrid< std::array<Real, fsgrids::ehall::N_EHALL>, 2>& EHallGrid,
-                      FsGrid< std::array<Real, fsgrids::egradpe::N_EGRADPE>, 2>& EGradPeGrid,
-                      FsGrid< std::array<Real, fsgrids::moments::N_MOMENTS>, 2>& momentsGrid,
-                      FsGrid< std::array<Real, fsgrids::dperb::N_DPERB>, 2>& dPerBGrid,
-                      FsGrid< std::array<Real, fsgrids::dmoments::N_DMOMENTS>, 2>& dMomentsGrid,
-                      FsGrid< std::array<Real, fsgrids::bgbfield::N_BGB>, 2>& BgBGrid,
-                      FsGrid< std::array<Real, fsgrids::volfields::N_VOL>, 2>& volGrid,
-                      FsGrid< fsgrids::technical, 2>& technicalGrid,
+                      FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, FS_STENCIL_WIDTH> & perBGrid,
+                      FsGrid< std::array<Real, fsgrids::efield::N_EFIELD>, FS_STENCIL_WIDTH> & EGrid,
+                      FsGrid< std::array<Real, fsgrids::ehall::N_EHALL>, FS_STENCIL_WIDTH> & EHallGrid,
+                      FsGrid< std::array<Real, fsgrids::egradpe::N_EGRADPE>, FS_STENCIL_WIDTH> & EGradPeGrid,
+                      FsGrid< std::array<Real, fsgrids::moments::N_MOMENTS>, FS_STENCIL_WIDTH> & momentsGrid,
+                      FsGrid< std::array<Real, fsgrids::dperb::N_DPERB>, FS_STENCIL_WIDTH> & dPerBGrid,
+                      FsGrid< std::array<Real, fsgrids::dmoments::N_DMOMENTS>, FS_STENCIL_WIDTH> & dMomentsGrid,
+                      FsGrid< std::array<Real, fsgrids::bgbfield::N_BGB>, FS_STENCIL_WIDTH> & BgBGrid,
+                      FsGrid< std::array<Real, fsgrids::volfields::N_VOL>, FS_STENCIL_WIDTH> & volGrid,
+                      FsGrid< fsgrids::technical, FS_STENCIL_WIDTH> & technicalGrid,
                       const std::string& meshName, vlsv::Writer& vlsvWriter,
                       const bool writeAsFloat) {
 
@@ -209,7 +209,7 @@ namespace DRO {
 
       // Only task 0 of the ionosphere communicator writes
       int rank = -1;
-      if(grid.isCouplingToCells) {
+      if(grid.isCouplingInwards || grid.isCouplingOutwards) {
         MPI_Comm_rank(grid.communicator,&rank);
       }
       if(rank == 0) {
@@ -261,7 +261,7 @@ namespace DRO {
       // Only task 0 of the ionosphere communicator writes, but all others need to sync vectorSize
       int rank = -1;
       int worldRank = 0;
-      if(grid.isCouplingToCells) {
+      if(grid.isCouplingInwards || grid.isCouplingOutwards) {
         MPI_Comm_rank(grid.communicator,&rank);
       }
       MPI_Comm_rank(MPI_COMM_WORLD,&worldRank);
@@ -288,6 +288,23 @@ namespace DRO {
       }
 
       return true;
+   }
+
+   std::string DataReductionOperatorMPIGridCell::getName() const {return variableName;}
+   bool DataReductionOperatorMPIGridCell::getDataVectorInfo(std::string& dataType, unsigned int& dataSize, unsigned int& vectorSize) const {
+      dataType = "float";
+      dataSize = sizeof(Real);
+      vectorSize = numFloats;
+      return true;
+   }
+   bool DataReductionOperatorMPIGridCell::reduceData(const SpatialCell* cell,char* buffer) {
+      std::vector<Real> varBuffer = lambda(cell);
+
+      assert(varBuffer.size() == numFloats);
+
+      for(int i=0; i<numFloats; i++) {
+         buffer[i] = varBuffer[i];
+      }
    }
 
    DataReductionOperatorBVOLDerivatives::DataReductionOperatorBVOLDerivatives(const std::string& name,const unsigned int parameterIndex,const unsigned int vectorSize):
