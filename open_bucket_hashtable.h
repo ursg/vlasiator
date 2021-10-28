@@ -26,7 +26,7 @@
 #include "definitions.h"
 
 // Open bucket power-of-two sized hash table with multiplicative fibonacci hashing
-template <typename GID, typename LID, int maxBucketOverflow = 4> class OpenBucketHashtable {
+template <typename GID, typename LID, int maxBucketOverflow = 8, GID EMPTYBUCKET = vmesh::INVALID_GLOBALID, GID TOMBSTONE = EMPTYBUCKET - 1> class OpenBucketHashtable {
 private:
    int sizePower; // Logarithm (base two) of the size of the table
    size_t fill;   // Number of filled buckets
@@ -41,7 +41,7 @@ private:
 
 public:
    OpenBucketHashtable()
-       : sizePower(4), fill(0), buckets(1 << sizePower, std::pair<GID, LID>(vmesh::INVALID_GLOBALID, vmesh::INVALID_LOCALID)){};
+       : sizePower(4), fill(0), buckets(1 << sizePower, std::pair<GID, LID>(EMPTYBUCKET, 0)){};
    OpenBucketHashtable(const OpenBucketHashtable<GID, LID>& other)
        : sizePower(other.sizePower), fill(other.fill), buckets(other.buckets){};
 
@@ -52,14 +52,14 @@ public:
          throw std::out_of_range("OpenBucketHashtable ran into rehashing catastrophe and exceeded 32bit buckets.");
       }
       std::vector<std::pair<GID, LID>> newBuckets(1 << newSizePower,
-                                                  std::pair<GID, LID>(vmesh::INVALID_LOCALID, vmesh::INVALID_GLOBALID));
+                                                  std::pair<GID, LID>(EMPTYBUCKET, 0));
       sizePower = newSizePower;
       int bitMask = (1 << sizePower) - 1; // For efficient modulo of the array size
 
       // Iterate through all old elements and rehash them into the new array.
       for (auto& e : buckets) {
-         // Skip empty buckets
-         if (e.first == vmesh::INVALID_LOCALID) {
+         // Skip empty buckets and tombstones
+         if (e.first == EMPTYBUCKET || e.first == TOMBSTONE) {
             continue;
          }
 
@@ -67,8 +67,9 @@ public:
          bool found = false;
          for (int i = 0; i < maxBucketOverflow; i++) {
             std::pair<GID, LID>& candidate = newBuckets[(newHash + i) & bitMask];
-            if (candidate.first == vmesh::INVALID_GLOBALID) {
+            if (candidate.first == EMPTYBUCKET) {
                // Found an empty bucket, assign that one.
+               // Note: no need to check for tombstones here, as the buckets are brand new.
                candidate = e;
                found = true;
                break;
@@ -86,6 +87,11 @@ public:
       buckets = newBuckets;
    }
 
+   // Rehash completely at the current size, getting rid of tombstones.
+   void scrub() {
+      rehash(sizePower);
+   }
+
    // Element access (by reference). Nonexistent elements get created.
    LID& at(const GID& key) {
       int bitMask = (1 << sizePower) - 1; // For efficient modulo of the array size
@@ -98,7 +104,7 @@ public:
             // Found a match, return that
             return candidate.second;
          }
-         if (candidate.first == vmesh::INVALID_GLOBALID) {
+         if (candidate.first == EMPTYBUCKET || candidate.first == TOMBSTONE) {
             // Found an empty bucket, assign and return that.
             candidate.first = key;
             fill++;
@@ -128,7 +134,7 @@ public:
    }
 
    void clear() {
-      buckets = std::vector<std::pair<GID, LID>>(1 << sizePower, {vmesh::INVALID_GLOBALID, vmesh::INVALID_LOCALID});
+      buckets = std::vector<std::pair<GID, LID>>(1 << sizePower, {EMPTYBUCKET, 0});
       fill = 0;
    }
 
@@ -143,7 +149,8 @@ public:
       iterator& operator++() {
          do {
             index++;
-         } while (hashtable->buckets[index].first == vmesh::INVALID_GLOBALID && index < hashtable->buckets.size());
+         } while ( (hashtable->buckets[index].first == EMPTYBUCKET ||
+                    hashtable->buckets[index].first == TOMBSTONE) && index < hashtable->buckets.size());
          return *this;
       }
 
@@ -170,7 +177,8 @@ public:
       const_iterator& operator++() {
          do {
             index++;
-         } while (hashtable->buckets[index].first == vmesh::INVALID_GLOBALID && index < hashtable->buckets.size());
+         } while ( (hashtable->buckets[index].first == EMPTYBUCKET ||
+                    hashtable->buckets[index].first == TOMBSTONE) && index < hashtable->buckets.size());
          return *this;
       }
 
@@ -187,7 +195,7 @@ public:
 
    iterator begin() {
       for (size_t i = 0; i < buckets.size(); i++) {
-         if (buckets[i].first != vmesh::INVALID_GLOBALID) {
+         if (buckets[i].first != EMPTYBUCKET && buckets[i].first != TOMBSTONE) {
             return iterator(*this, i);
          }
       }
@@ -195,7 +203,7 @@ public:
    }
    const_iterator begin() const {
       for (size_t i = 0; i < buckets.size(); i++) {
-         if (buckets[i].first != vmesh::INVALID_GLOBALID) {
+         if (buckets[i].first != EMPTYBUCKET && buckets[i].first != TOMBSTONE) {
             return const_iterator(*this, i);
          }
       }
@@ -218,10 +226,12 @@ public:
             return iterator(*this, (hashIndex + i) & bitMask);
          }
 
-         if (candidate.first == vmesh::INVALID_GLOBALID) {
+         if (candidate.first == EMPTYBUCKET) {
             // Found an empty bucket. Return empty.
             return end();
          }
+
+         // Tombstones are simply skipped over here
       }
 
       // Not found
@@ -240,10 +250,12 @@ public:
             return const_iterator(*this, (hashIndex + i) & bitMask);
          }
 
-         if (candidate.first == vmesh::INVALID_GLOBALID) {
+         if (candidate.first == EMPTYBUCKET) {
             // Found an empty bucket. Return empty.
             return end();
          }
+
+         // Tombstones are simply skipped over here
       }
 
       // Not found
@@ -261,31 +273,31 @@ public:
 
    // Remove one element from the hash table.
    iterator erase(iterator keyPos) {
+      int bitMask = (1 << sizePower) - 1; // For efficient modulo of the array size
       // Due to overflowing buckets, this might require moving quite a bit of stuff around.
       size_t index = keyPos.getIndex();
 
-      if (buckets[index].first != vmesh::INVALID_GLOBALID) {
+      if (buckets[index].first != EMPTYBUCKET && buckets[index].first != TOMBSTONE) {
          // Decrease fill count if this spot wasn't empty already
          fill--;
       }
+
       // Clear the element itself.
-      buckets[index] = std::pair<GID, LID>(vmesh::INVALID_GLOBALID, vmesh::INVALID_LOCALID);
+      if(buckets[(index+1) & bitMask].first == EMPTYBUCKET) {
+         // If the next one is empty, we can be, too!
+         buckets[index].first = EMPTYBUCKET;
 
-      int bitMask = (1 << sizePower) - 1; // For efficient modulo of the array size
-      GID nextBucket = buckets[(index + 1) & bitMask].first;
-      if (nextBucket == vmesh::INVALID_GLOBALID) {
-         // Easy case: if the next bucket is empty, we are done.
-         ++keyPos;
-         return keyPos;
+         // If the previous was a tombstone, it can be cleared.
+         index = (index - 1) & bitMask;
+         while(buckets[index].first == TOMBSTONE) {
+            buckets[index].first = EMPTYBUCKET;
+            index = (index - 1) & bitMask;
+         }
       } else {
-         // Othrwise, we need to renumber.
-         // TODO: This is potentially quite slow. Are there more
-         // efficient or elegant ways to resolve this?
-         rehash(sizePower);
-
-         // Find the next bucket member at its potentially new location.
-         return find(nextBucket);
+         buckets[index].first = TOMBSTONE;
       }
+
+      return ++keyPos; // Return the next valid iterator.
    }
 
    void swap(OpenBucketHashtable<GID, LID>& other) {

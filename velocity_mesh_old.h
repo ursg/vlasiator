@@ -102,6 +102,7 @@ namespace vmesh {
       size_t size() const;
       size_t sizeInBytes() const;
       void swap(VelocityMesh& vm);
+      void scrub();
 
     private:
       static std::vector<vmesh::MeshParameters> meshParameters;
@@ -671,6 +672,11 @@ namespace vmesh {
    void VelocityMesh<GID,LID>::swap(VelocityMesh& vm) {
       globalToLocalMap.swap(vm.globalToLocalMap);
       localToGlobalMap.swap(vm.localToGlobalMap);
+   }
+
+   template<typename GID,typename LID> inline
+   void VelocityMesh<GID,LID>::scrub() {
+      globalToLocalMap.scrub();
    }
    
 } // namespace vmesh
