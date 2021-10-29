@@ -97,6 +97,7 @@ public:
       int bitMask = (1 << sizePower) - 1; // For efficient modulo of the array size
       uint32_t hashIndex = hash(key);
 
+      uint32_t firstTombstone = std::numeric_limits<uint32_t>::max();
       // Try to find the matching bucket.
       for (int i = 0; i < maxBucketOverflow; i++) {
          std::pair<GID, LID>& candidate = buckets[(hashIndex + i) & bitMask];
@@ -104,12 +105,22 @@ public:
             // Found a match, return that
             return candidate.second;
          }
-         if (candidate.first == EMPTYBUCKET || candidate.first == TOMBSTONE) {
+         if (candidate.first == TOMBSTONE && firstTombstone == std::numeric_limits<uint32_t>::max()) {
+            firstTombstone = i;
+         }
+         if (candidate.first == EMPTYBUCKET) {
             // Found an empty bucket, assign and return that.
             candidate.first = key;
             fill++;
             return candidate.second;
          }
+      }
+
+      // Not found. Did we have a tombston on the way, that we can reuse?
+      if(firstTombstone != std::numeric_limits<uint32_t>::max()) {
+         buckets[(hashIndex + firstTombstone) & bitMask] .first = key;
+         fill++;
+         return buckets[(hashIndex + firstTombstone) & bitMask].second;
       }
 
       // Not found, and we have no free slots to create a new one. So we need to rehash to a larger size.
