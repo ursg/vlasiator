@@ -110,9 +110,16 @@ public:
          }
          if (candidate.first == EMPTYBUCKET) {
             // Found an empty bucket, assign and return that.
-            candidate.first = key;
-            fill++;
-            return candidate.second;
+            // (OR: if we encountered a tombstone before, return that)
+            if(firstTombstone != std::numeric_limits<uint32_t>::max()) {
+               buckets[(hashIndex + firstTombstone) & bitMask] .first = key;
+               fill++;
+               return buckets[(hashIndex + firstTombstone) & bitMask].second;
+            } else {
+               candidate.first = key;
+               fill++;
+               return candidate.second;
+            }
          }
       }
 
