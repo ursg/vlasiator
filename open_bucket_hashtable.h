@@ -32,11 +32,14 @@ private:
    size_t fill;   // Number of filled buckets
    std::vector<std::pair<GID, LID>> buckets;
 
-   // Fibonacci hash function for 32bit values
-   uint32_t hash(GID in) const {
-      in ^= in >> (32 - sizePower);
-      uint32_t retval = (uint32_t)(in * 2654435769ul) >> (32 - sizePower);
-      return retval;
+   //FNV-1a hash function for 32bit values
+   uint32_t hash(GID in ) const{
+      char* data= (char*)&in;
+      uint32_t h = 2166136261ul;
+      for (size_t i = 0; i < 4; i++){
+         h = (h ^ data[i]) *  16777619ul;
+      }
+      return h;
    }
 
 public:
