@@ -109,7 +109,7 @@ namespace vmesh {
       size_t meshID;
 
       std::vector<GID> localToGlobalMap;
-      OpenBucketHashtable<GID,LID> globalToLocalMap; //
+      OBH::OpenBucketHashtable<GID,LID> globalToLocalMap; //
       //std::unordered_map<GID,LID> globalToLocalMap;
    };
 
