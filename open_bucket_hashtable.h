@@ -55,7 +55,7 @@ namespace OBH{
       
       //Wrapper function using templated HashFunction generator  
       uint32_t hash(GID in) const {
-         if constexpr (sizeof(GID) < 8){
+         if constexpr (sizeof(GID) <sizeof(uint32_t) ){
             return fibonacci(in,sizePower);
          }else{
             return fnv_1a(&in,sizeof(GID));
