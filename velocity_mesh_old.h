@@ -102,6 +102,7 @@ namespace vmesh {
       size_t size() const;
       size_t sizeInBytes() const;
       void swap(VelocityMesh& vm);
+      OpenBucketHashtable<GID,LID>& getHashtable() {return globalToLocalMap;};
 
     private:
       static std::vector<vmesh::MeshParameters> meshParameters;

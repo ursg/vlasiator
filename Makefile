@@ -220,7 +220,7 @@ endif
 
 # If we are building a CUDA vrsion, we require its object files
 ifeq ($(USE_CUDA),1)
-	OBJS += cuda_acc_map_kernel.o cudalink1.o cudalink2.o
+	OBJS += cuda_acc_map_kernel.o cudalink.o
 endif
 
 # Add field solver objects
@@ -407,6 +407,8 @@ cpu_acc_intersections.o: ${DEPS_CPU_ACC_INTERSECTS}
 ifeq ($(USE_CUDA),1)
 cuda_acc_map_kernel.o: ${DEPS_CUDA_ACC_MAP_KERNEL}
 	${NVCC} ${CUDAFLAGS} -D${VECTORCLASS} -dc vlasovsolver/cuda_acc_map_kernel.cu
+cuda_build_acc_columns.o: ${DEPS_CUDA_BUILD_ACC_COLUMNS}
+	${NVCC} ${CUDAFLAGS} -D${VECTORCLASS} -dc vlasovsolver/cuda_build_acc_columns.cu
 endif
 
 cpu_acc_map.o: ${DEPS_CPU_ACC_MAP} ${DEPS_CUDA_ACC_MAP_KERNEL}
@@ -502,11 +504,8 @@ object_wrapper.o:  $(DEPS_COMMON)  object_wrapper.h object_wrapper.cpp
 	${CMP} ${CXXFLAGS} ${FLAGS} -c object_wrapper.cpp ${INC_DCCRG} ${INC_ZOLTAN} ${INC_BOOST} ${INC_FSGRID}
 
 ifeq ($(USE_CUDA),1)
-cudalink1.o: cpu_acc_map.o
-	${NVCC} ${CUDAFLAGS} -dlink cpu_acc_map.o -o cudalink1.o
-
-cudalink2.o: cuda_acc_map_kernel.o
-	${NVCC} ${CUDAFLAGS} -dlink cuda_acc_map_kernel.o -o cudalink2.o
+cudalink.o: cpu_acc_map.o cuda_acc_map_kernel.o cuda_build_acc_columns.o
+	${NVCC} ${CUDAFLAGS} -dlink $^ -o cudalink.o
 endif
 
 # Make executable

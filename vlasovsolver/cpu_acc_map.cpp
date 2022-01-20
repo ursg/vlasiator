@@ -35,6 +35,7 @@
 #include "cuda_1d_plm.h"
 #include "cpu_acc_map.hpp"
 #include "cuda_acc_map_kernel.cuh"
+#include "cuda_build_acc_columns.cuh"
 
 using namespace std;
 using namespace spatial_cell;
@@ -180,8 +181,12 @@ bool map_1d(SpatialCell* spatial_cell,
 #endif
 
    //nothing to do if no blocks
-   if(vmesh.size() == 0)
+   if(vmesh.size() == 0) {
       return true;
+   }
+
+   cudaStream_t cuda_stream;
+   cudaStreamCreate(&cuda_stream);
 
    const int NUM_ASYNC_QUEUES=P::openaccQueueNum;
    int openacc_async_queue_id = (int)(spatial_cell->parameters[CellParams::CELLID]) % NUM_ASYNC_QUEUES;
@@ -248,6 +253,10 @@ bool map_1d(SpatialCell* spatial_cell,
    const Realv i_dv=1.0/dv;
 
    // sort blocks according to dimension, and divide them into columns
+   // Do this on the GPU first
+   buildAccColumns(vmesh.getHashtable(), dimension, cuda_stream);
+
+   // And then again on the CPU, for comparison
    vmesh::LocalID* blocks = new vmesh::LocalID[vmesh.size()]; // GIDs in dimension-order (length nBlocks)
    std::vector<uint> columnBlockOffsets; // indexes where columns start (in blocks, length totalColumns)
    std::vector<uint> columnNumBlocks; // length of column (in blocks, length totalColumns)
@@ -257,6 +266,9 @@ bool map_1d(SpatialCell* spatial_cell,
    sortBlocklistByDimension(vmesh, dimension, blocks,
                             columnBlockOffsets, columnNumBlocks,
                             setColumnOffsets, setNumColumns);
+
+   // Now compare column outputs.
+   
 
    // Calculate total sum of columns and total values size
    uint totalColumns = 0;
@@ -742,7 +754,7 @@ bool map_1d(SpatialCell* spatial_cell,
       } //for loop over columns
    }
 
-
+   cudaStreamDestroy(cuda_stream);
    delete [] blocks;
    delete [] columns;
    return true;
