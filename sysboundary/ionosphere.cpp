@@ -28,6 +28,7 @@
 #include <iostream>
 #include <iomanip>
 #include <fstream>
+#include <algorithm>
 
 #include "ionosphere.h"
 #include "../projects/project.h"
@@ -2222,12 +2223,14 @@ namespace SBC {
        }
 
        iSolverReal residualnorm = 0;
+       std::vector<double> residuals(nodes.size());
        #pragma omp parallel for reduction(+:residualnorm)
        for(uint n=0; n<nodes.size(); n++) {
          Node& N=nodes[n];
          if(gaugeFixing == Equator && fabs(N.x[2]) < Ionosphere::innerRadius / 10.) {
             // Skip nodes that are not participating in the calculation.
             N.parameters[ionosphereParameters::RRESIDUAL] = 0;
+            N.parameters[ionosphereParameters::RESIDUAL] = 0;
          } else {
             // Calculate residual of the new solution. The faster way to do this would be
             //
@@ -2240,10 +2243,14 @@ namespace SBC {
             // See https://en.wikipedia.org/wiki/Conjugate_gradient_method#Explicit_residual_calculation
             iSolverReal newresid = N.parameters[ionosphereParameters::SOURCE] - Atimes(n, ionosphereParameters::SOLUTION);
             N.parameters[ionosphereParameters::RESIDUAL] = newresid;
-            residualnorm += newresid * newresid;
+            residuals[n] = newresid;
 
             N.parameters[ionosphereParameters::RRESIDUAL] = N.parameters[ionosphereParameters::SOURCE] - Atimes(n, ionosphereParameters::SOLUTION, true);
          }
+       }
+       std::sort(residuals.begin(), residuals.end());
+       for(uint n=0; n<residuals.size(); n++) {
+         residualnorm += residuals[n] * residuals[n];
        }
        for(uint n=0; n<nodes.size(); n++) {
          Node& N=nodes[n];
