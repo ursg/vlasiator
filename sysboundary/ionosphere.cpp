@@ -3729,18 +3729,21 @@ namespace SBC {
                std::array<Real, 3> rnorm({r[0] / rlength, r[1] / rlength, r[2] / rlength});
                Real vdotr = (vxCellCenter*rnorm[0] + vyCellCenter*rnorm[1] * vzCellCenter*rnorm[2]);
 
+               // v_r = -v_r = -r <v, r> (where r is normalized)
+               // => v = v - 2*r <r,v>
+               Real vNeighboursdotr = (vNeighbours[0] * rnorm[0] + vNeighbours[1] * rnorm[1] + vNeighbours[2] * rnorm[2]);
+               std::array<Real, 3> vNeighboursMirrored({vNeighbours[0] - 2*rnorm[0]*vNeighboursdotr,
+                     vNeighbours[1] - 2*rnorm[1]*vNeighboursdotr,
+                     vNeighbours[2] - 2*rnorm[2]*vNeighboursdotr});
+
                if(vdotr < 0) {
                   data[block * WID3 + cellIndex(ic, jc, kc)] =
                      shiftedMaxwellianDistribution(popID, density, temperature, vxCellCenter - vNeighbours[0], vyCellCenter - vNeighbours[1], vzCellCenter - vNeighbours[2]);
                } else {
                   if(1-mu*mu < sqrt(Bsqr)/5e-5) {
                      // outside the loss cone
-                     
-                     // v_r = -v_r = -r <v, r> (where r is normalized)
-                     // => v = v - 2*r <r,v>
-
                      data[block * WID3 + cellIndex(ic, jc, kc)] =
-                        shiftedMaxwellianDistribution(popID, density, temperature, vxCellCenter - 2*rnorm[0]*vdotr - vNeighbours[0] , vyCellCenter - 2*rnorm[1]*vdotr - vNeighbours[1], vzCellCenter - 2*rnorm[2]*vdotr - vNeighbours[2]);
+                        shiftedMaxwellianDistribution(popID, density, temperature, vxCellCenter - 2*rnorm[0]*vdotr - vNeighboursMirrored[0] , vyCellCenter - 2*rnorm[1]*vdotr - vNeighboursMirrored[1], vzCellCenter +- 2*rnorm[2]*vdotr - vNeighboursMirrored[2]);
                   } else {
                      // Inside the loss cone
                      data[block * WID3 + cellIndex(ic, jc, kc)] = 0;
