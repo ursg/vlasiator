@@ -3751,7 +3751,7 @@ namespace SBC {
                }
 
                // Add ionospheric outflow maxwellian on top.
-               data[block * WID3 + cellIndex(ic, jc, kc)] =
+               data[block * WID3 + cellIndex(ic, jc, kc)] +=
                      shiftedMaxwellianDistribution(popID, sP.rho, sP.T, vxCellCenter - vDrift[0], vyCellCenter - vDrift[1], vzCellCenter - vDrift[2]);
             }
          }
