@@ -291,6 +291,32 @@ void calculateSpatialLocalTranslation(
       phiprof::stop("compute-mapping-z");
    }
 
+   // Check whether any cell's f has been emptied
+   for (size_t c=0; c<local_propagated_cells.size(); ++c) {
+         SpatialCell* cell = mpiGrid[local_propagated_cells[c]];
+         Real array[4] = {0.,0.,0.,0.};
+         vmesh::VelocityBlockContainer<vmesh::LocalID>& blockContainer = cell->get_velocity_blocks(0);
+         if (blockContainer.size() == 0) {
+            fprintf(stderr, "Warning: Cell %li has zero blocks\n", local_propagated_cells[c]);
+            continue;
+         }
+         const Realf* data       = blockContainer.getData();
+         const Real* blockParams = blockContainer.getParameters();
+
+         for (vmesh::LocalID blockLID=0; blockLID<blockContainer.size(); ++blockLID) {
+           blockVelocityFirstMoments(data+blockLID*WID3,
+               blockParams+blockLID*BlockParams::N_VELOCITY_BLOCK_PARAMS,
+               array);
+         }
+
+         if(array[0] == 0) {
+           fprintf(stderr, "ERROR: Cell %li has rho zero after translate in Z.\n", local_propagated_cells[c]);
+         }
+         if(isnan(array[0])) {
+           fprintf(stderr, "ERROR: Cell %li has rho NaN after translate in Z.\n", local_propagated_cells[c]);
+         }
+   }
+
    // ------------- SLICE - map dist function in X --------------- //
    if(P::xcells_ini > 1){
       phiprof::start("compute-mapping-x");
@@ -302,6 +328,31 @@ void calculateSpatialLocalTranslation(
       phiprof::stop("compute-mapping-x");
    }
 
+   // Check whether any cell's f has been emptied
+   for (size_t c=0; c<local_propagated_cells.size(); ++c) {
+         SpatialCell* cell = mpiGrid[local_propagated_cells[c]];
+         Real array[4] = {0.,0.,0.,0.};
+         vmesh::VelocityBlockContainer<vmesh::LocalID>& blockContainer = cell->get_velocity_blocks(0);
+         if (blockContainer.size() == 0) {
+            fprintf(stderr, "Warning: Cell %li has zero blocks\n", local_propagated_cells[c]);
+            continue;
+         }
+         const Realf* data       = blockContainer.getData();
+         const Real* blockParams = blockContainer.getParameters();
+
+         for (vmesh::LocalID blockLID=0; blockLID<blockContainer.size(); ++blockLID) {
+           blockVelocityFirstMoments(data+blockLID*WID3,
+               blockParams+blockLID*BlockParams::N_VELOCITY_BLOCK_PARAMS,
+               array);
+         }
+
+         if(array[0] == 0) {
+           fprintf(stderr, "ERROR: Cell %li has rho zero after translate in X.\n", local_propagated_cells[c]);
+         }
+         if(isnan(array[0])) {
+           fprintf(stderr, "ERROR: Cell %li has rho NaN after translate in X.\n", local_propagated_cells[c]);
+         }
+   }
    // ------------- SLICE - map dist function in Y --------------- //
    if(P::ycells_ini > 1) {
       phiprof::start("compute-mapping-y");
@@ -311,6 +362,32 @@ void calculateSpatialLocalTranslation(
          trans_map_1d_amr(mpiGrid,local_propagated_cells, nPencils, 1,dt,popID); // map along y//
       }
       phiprof::stop("compute-mapping-y");
+   }
+
+   // Check whether any cell's f has been emptied
+   for (size_t c=0; c<local_propagated_cells.size(); ++c) {
+         SpatialCell* cell = mpiGrid[local_propagated_cells[c]];
+         Real array[4] = {0.,0.,0.,0.};
+         vmesh::VelocityBlockContainer<vmesh::LocalID>& blockContainer = cell->get_velocity_blocks(0);
+         if (blockContainer.size() == 0) {
+            fprintf(stderr, "Warning: Cell %li has zero blocks\n", local_propagated_cells[c]);
+            continue;
+         }
+         const Realf* data       = blockContainer.getData();
+         const Real* blockParams = blockContainer.getParameters();
+
+         for (vmesh::LocalID blockLID=0; blockLID<blockContainer.size(); ++blockLID) {
+           blockVelocityFirstMoments(data+blockLID*WID3,
+               blockParams+blockLID*BlockParams::N_VELOCITY_BLOCK_PARAMS,
+               array);
+         }
+
+         if(array[0] == 0) {
+           fprintf(stderr, "ERROR: Cell %li has rho zero after translate in Y.\n", local_propagated_cells[c]);
+         }
+         if(isnan(array[0])) {
+           fprintf(stderr, "ERROR: Cell %li has rho NaN after translate in Y.\n", local_propagated_cells[c]);
+         }
    }
    phiprof::start(trans_timer);
    updateRemoteVelocityBlockLists(mpiGrid,popID,FULL_NEIGHBORHOOD_ID); // already done in ACC under adjustVelocityBlocks
