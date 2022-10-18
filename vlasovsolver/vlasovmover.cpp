@@ -308,6 +308,7 @@ void calculateSpatialLocalTranslation(
                blockParams+blockLID*BlockParams::N_VELOCITY_BLOCK_PARAMS,
                array);
          }
+         cell->parameters[CellParams::RHOM_RZ] = array[0];
 
          if(array[0] == 0) {
            fprintf(stderr, "ERROR: Cell %li has rho zero after translate in Z.\n", local_propagated_cells[c]);
@@ -345,6 +346,7 @@ void calculateSpatialLocalTranslation(
                blockParams+blockLID*BlockParams::N_VELOCITY_BLOCK_PARAMS,
                array);
          }
+         cell->parameters[CellParams::RHOM_RX] = array[0];
 
          if(array[0] == 0) {
            fprintf(stderr, "ERROR: Cell %li has rho zero after translate in X.\n", local_propagated_cells[c]);
@@ -381,6 +383,7 @@ void calculateSpatialLocalTranslation(
                blockParams+blockLID*BlockParams::N_VELOCITY_BLOCK_PARAMS,
                array);
          }
+         cell->parameters[CellParams::RHOM_RY] = array[0];
 
          if(array[0] == 0) {
            fprintf(stderr, "ERROR: Cell %li has rho zero after translate in Y.\n", local_propagated_cells[c]);

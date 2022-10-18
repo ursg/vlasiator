@@ -1623,6 +1623,9 @@ bool writeRestart(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
    //write out DROs we need for restarts
    DataReducer restartReducer;
    restartReducer.addOperator(new DRO::DataReductionOperatorCellParams("moments",CellParams::RHOM,5));
+   restartReducer.addOperator(new DRO::DataReductionOperatorCellParams("rhom_rx",CellParams::RHOM_RX,1));
+   restartReducer.addOperator(new DRO::DataReductionOperatorCellParams("rhom_ry",CellParams::RHOM_RY,1));
+   restartReducer.addOperator(new DRO::DataReductionOperatorCellParams("rhom_rz",CellParams::RHOM_RZ,1));
    restartReducer.addOperator(new DRO::DataReductionOperatorCellParams("moments_dt2",CellParams::RHOM_DT2,5));
    restartReducer.addOperator(new DRO::DataReductionOperatorCellParams("moments_r",CellParams::RHOM_R,5));
    restartReducer.addOperator(new DRO::DataReductionOperatorCellParams("moments_v",CellParams::RHOM_V,5));
