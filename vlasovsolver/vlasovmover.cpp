@@ -311,7 +311,12 @@ void calculateSpatialLocalTranslation(
          cell->parameters[CellParams::RHOM_RZ] = array[0];
 
          if(array[0] == 0) {
-           fprintf(stderr, "ERROR: Cell %li has rho zero after translate in Z.\n", local_propagated_cells[c]);
+           auto local_cells = mpiGrid.get_cells();
+           if(std::find(local_cells.begin(), local_cells.end(), local_propagated_cells[c]) != local_cells.end()) {
+              fprintf(stderr, "ERROR: Cell %li has rho zero after translate in Z. This is a local cell.\n", local_propagated_cells[c]);
+           } else {
+              fprintf(stderr, "ERROR: Cell %li has rho zero after translate in Z. This is a ghost cell.\n", local_propagated_cells[c]);
+           }
          }
          if(isnan(array[0])) {
            fprintf(stderr, "ERROR: Cell %li has rho NaN after translate in Z.\n", local_propagated_cells[c]);
@@ -349,7 +354,12 @@ void calculateSpatialLocalTranslation(
          cell->parameters[CellParams::RHOM_RX] = array[0];
 
          if(array[0] == 0) {
-           fprintf(stderr, "ERROR: Cell %li has rho zero after translate in X.\n", local_propagated_cells[c]);
+           auto local_cells = mpiGrid.get_cells();
+           if(std::find(local_cells.begin(), local_cells.end(), local_propagated_cells[c]) != local_cells.end()) {
+              fprintf(stderr, "ERROR: Cell %li has rho zero after translate in X. This is a local cell.\n", local_propagated_cells[c]);
+           } else {
+              fprintf(stderr, "ERROR: Cell %li has rho zero after translate in X. This is a ghost cell.\n", local_propagated_cells[c]);
+           }
          }
          if(isnan(array[0])) {
            fprintf(stderr, "ERROR: Cell %li has rho NaN after translate in X.\n", local_propagated_cells[c]);
@@ -386,7 +396,12 @@ void calculateSpatialLocalTranslation(
          cell->parameters[CellParams::RHOM_RY] = array[0];
 
          if(array[0] == 0) {
-           fprintf(stderr, "ERROR: Cell %li has rho zero after translate in Y.\n", local_propagated_cells[c]);
+           auto local_cells = mpiGrid.get_cells();
+           if(std::find(local_cells.begin(), local_cells.end(), local_propagated_cells[c]) != local_cells.end()) {
+              fprintf(stderr, "ERROR: Cell %li has rho zero after translate in Y. This is a local cell.\n", local_propagated_cells[c]);
+           } else {
+              fprintf(stderr, "ERROR: Cell %li has rho zero after translate in Y. This is a ghost cell.\n", local_propagated_cells[c]);
+           }
          }
          if(isnan(array[0])) {
            fprintf(stderr, "ERROR: Cell %li has rho NaN after translate in Y.\n", local_propagated_cells[c]);

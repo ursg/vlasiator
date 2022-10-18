@@ -1329,14 +1329,30 @@ void propagatePencil(
                                                                               ngbr_target_density
                                                                               * dz[i_source] / dz[i_source + 1],
                                                                               Vec(0.0));
+            for(int j=0; j<VECL; j++) {
+               if(isnan(targetValues[i_trans_pt_blockv(planeVector, k, i + 1)][j])) {
+                  fprintf(stderr, "propagatePencil writing NaN to neghbour +1, target_density= %lf, dz[i] = %lf, dz[i+1] = %lf\n", ngbr_target_density[j], dz[i_source], dz[i_source+1]);
+               }
+            }
+
             targetValues[i_trans_pt_blockv(planeVector, k, i - 1 )] += select(!positiveTranslationDirection,
                                                                               ngbr_target_density
                                                                               * dz[i_source] / dz[i_source - 1],
                                                                               Vec(0.0));
+            for(int j=0; j<VECL; j++) {
+               if(isnan(targetValues[i_trans_pt_blockv(planeVector, k, i - 1)][j])) {
+                  fprintf(stderr, "propagatePencil writing NaN to neghbour -1, target_density= %lf, dz[i] = %lf, dz[i-1] = %lf\n", ngbr_target_density[j], dz[i_source], dz[i_source-1]);
+               }
+            }
             
             // in the current original cells we will put the rest of the original density
             targetValues[i_trans_pt_blockv(planeVector, k, i)] += 
                values[i_trans_ps_blockv_pencil(planeVector, k, i, lengthOfPencil)] - ngbr_target_density;
+            for(int j=0; j<VECL; j++) {
+               if(isnan(targetValues[i_trans_pt_blockv(planeVector, k, i)][j])) {
+                  fprintf(stderr, "propagatePencil writing NaN to centre, target_density= %lf\n", ngbr_target_density[j]);
+               }
+            }
          }
       }
    }
@@ -1551,6 +1567,12 @@ bool copy_trans_block_data_amr(
          if (blockLID != srcCell->invalid_local_id()) {
             // Get data pointer
             const Realf* block_data = srcCell->get_data(blockLID,popID);
+
+          for (uint i=0; i<WID3; ++i) {
+            if(isnan(block_data[i])) {
+              fprintf(stderr, "Dimension %c: block_data is NaN for cell %0.lf, blockGID %li, index %u\n", std::array<char,3>({'X','Y','Z'})[dimension], srcCell->parameters[CellParams::CELLID], blockGID, i);
+            }
+          }
 
             Realf blockValues[WID3];
             // Copy data to a temporary array and transpose values so that mapping is along k direction.
@@ -2239,6 +2261,9 @@ bool trans_map_1d_amr(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>&
                         // Loop over 3rd (vectorized) vspace dimension
                         for (uint iv = 0; iv < VECL; iv++) {
 
+                           if(isnan(vector[iv])) {
+                              fprintf(stderr, "Dimension %c: Pencil %i, BlockGID %i, assigning NaN to vector[iv].\n",  std::array<char,3>({'X','Y','Z'})[dimension],pencili, blockGID);
+                           }
                            // Store vector data in target data array.
                            targetBlockData[(totalTargetLength + icell) * WID3 +
                                            cellid_transpose[iv + planeVector * VECL + k * WID2]]
@@ -2335,7 +2360,14 @@ bool trans_map_1d_amr(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>&
                      }
                      
                      for(int i = 0; i < WID3 ; i++) {
+                        //if(isnan(targetBlockData[GID * WID3 + i])) {
+                        //  fprintf(stderr, "targetBlockData is NaN for cell %.0lf, pencil %u/%u, celli %i/%i. Before blockData was %lf\n", targetCell->SpatialCell::parameters[CellParams::CELLID], pencili, DimensionPencils[dimension].N, celli, targetLength, blockData[i]);
+                        //}
+                        Realf oldBlockData = blockData[i];
                         blockData[i] += targetBlockData[GID * WID3 + i] * areaRatio;
+                        if(isnan(blockData[i])) {
+                          fprintf(stderr, "Dimension %c: Pencil %i Assigning NaN blockData to cell %.0lf, blockGID %i, index %i. Before blockData was %lf. targetBlockdata=%lf, areaRatio=%f\n", std::array<char,3>({'X','Y','Z'})[dimension],pencili, targetCell->SpatialCell::parameters[CellParams::CELLID], blockGID, i, oldBlockData,targetBlockData[GID * WID3 + i], areaRatio);
+                        }
                      }
                   }
                }
