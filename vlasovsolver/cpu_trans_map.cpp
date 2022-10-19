@@ -689,7 +689,7 @@ void update_remote_mapping_contribution(
 
       const auto faceNbrs = mpiGrid.get_face_neighbors_of(local_cells[c]);
       
-      for (const auto nbr : faceNbrs) {
+      for (const auto& nbr : faceNbrs) {
          if(nbr.second == ((int)dimension + 1) * direction) {
             p_ngbr = nbr.first;
          }
