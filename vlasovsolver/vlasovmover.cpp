@@ -239,6 +239,10 @@ void calculateSpatialTranslation(
    // bailout(true, "", __FILE__, __LINE__);
 }
 
+extern std::unordered_set<CellID> LocalSet_x;
+extern std::unordered_set<CellID> LocalSet_y;
+extern std::unordered_set<CellID> LocalSet_z;
+
 /** Propagates the distribution function in spatial space.
     Now does extra calculations locally without interim MPI communication.
 
@@ -280,17 +284,17 @@ void calculateSpatialLocalTranslation(
    phiprof::stop(trans_timer);
    MPI_Barrier(MPI_COMM_WORLD);
 
-   for (size_t c=0; c<local_propagated_cells.size(); ++c) {
-         SpatialCell* cell = mpiGrid[local_propagated_cells[c]];
-         if(cell->parameters[CellParams::DX] == 0) {
-            fprintf(stderr, "Warning: Cell %li has DX=0 before Z translation\n", local_propagated_cells[c]);
-         }
-         if(cell->parameters[CellParams::DY] == 0) {
-            fprintf(stderr, "Warning: Cell %li has DY=0 before Z translation\n", local_propagated_cells[c]);
-         }
-         if(cell->parameters[CellParams::DZ] == 0) {
-            fprintf(stderr, "Warning: Cell %li has DZ=0 before Z translation\n", local_propagated_cells[c]);
-         }
+   for(const CellID& c : LocalSet_z) {
+     SpatialCell* cell = mpiGrid[c];
+     if(cell->parameters[CellParams::DX] == 0) {
+       fprintf(stderr, "Warning: Cell %li has DX=0 before Z translation\n", c);
+     }
+     if(cell->parameters[CellParams::DY] == 0) {
+       fprintf(stderr, "Warning: Cell %li has DY=0 before Z translation\n", c);
+     }
+     if(cell->parameters[CellParams::DZ] == 0) {
+       fprintf(stderr, "Warning: Cell %li has DZ=0 before Z translation\n", c);
+     }
    }
 
    // ------------- SLICE - map dist function in Z --------------- //
@@ -304,17 +308,17 @@ void calculateSpatialLocalTranslation(
       phiprof::stop("compute-mapping-z");
    }
 
-   for (size_t c=0; c<local_propagated_cells.size(); ++c) {
-         SpatialCell* cell = mpiGrid[local_propagated_cells[c]];
-         if(cell->parameters[CellParams::DX] == 0) {
-            fprintf(stderr, "Warning: Cell %li has DX=0 after Z translation\n", local_propagated_cells[c]);
-         }
-         if(cell->parameters[CellParams::DY] == 0) {
-            fprintf(stderr, "Warning: Cell %li has DY=0 after Z translation\n", local_propagated_cells[c]);
-         }
-         if(cell->parameters[CellParams::DZ] == 0) {
-            fprintf(stderr, "Warning: Cell %li has DZ=0 after Z translation\n", local_propagated_cells[c]);
-         }
+   for(const CellID& c : LocalSet_z) {
+     SpatialCell* cell = mpiGrid[c];
+     if(cell->parameters[CellParams::DX] == 0) {
+       fprintf(stderr, "Warning: Cell %li has DX=0 after Z translation\n", c);
+     }
+     if(cell->parameters[CellParams::DY] == 0) {
+       fprintf(stderr, "Warning: Cell %li has DY=0 after Z translation\n", c);
+     }
+     if(cell->parameters[CellParams::DZ] == 0) {
+       fprintf(stderr, "Warning: Cell %li has DZ=0 after Z translation\n", c);
+     }
    }
 
    // Check whether any cell's f has been emptied
@@ -360,6 +364,18 @@ void calculateSpatialLocalTranslation(
       phiprof::stop("compute-mapping-x");
    }
 
+   for(const CellID& c : LocalSet_x) {
+     SpatialCell* cell = mpiGrid[c];
+     if(cell->parameters[CellParams::DX] == 0) {
+       fprintf(stderr, "Warning: Cell %li has DX=0 after X translation\n", c);
+     }
+     if(cell->parameters[CellParams::DY] == 0) {
+       fprintf(stderr, "Warning: Cell %li has DY=0 after X translation\n", c);
+     }
+     if(cell->parameters[CellParams::DZ] == 0) {
+       fprintf(stderr, "Warning: Cell %li has DZ=0 after X translation\n", c);
+     }
+   }
    // Check whether any cell's f has been emptied
    for (size_t c=0; c<local_propagated_cells.size(); ++c) {
          SpatialCell* cell = mpiGrid[local_propagated_cells[c]];
@@ -402,6 +418,18 @@ void calculateSpatialLocalTranslation(
       phiprof::stop("compute-mapping-y");
    }
 
+   for(const CellID& c : LocalSet_y) {
+     SpatialCell* cell = mpiGrid[c];
+     if(cell->parameters[CellParams::DX] == 0) {
+       fprintf(stderr, "Warning: Cell %li has DX=0 after Y translation\n", c);
+     }
+     if(cell->parameters[CellParams::DY] == 0) {
+       fprintf(stderr, "Warning: Cell %li has DY=0 after Y translation\n", c);
+     }
+     if(cell->parameters[CellParams::DZ] == 0) {
+       fprintf(stderr, "Warning: Cell %li has DZ=0 after Y translation\n", c);
+     }
+   }
    // Check whether any cell's f has been emptied
    for (size_t c=0; c<local_propagated_cells.size(); ++c) {
          SpatialCell* cell = mpiGrid[local_propagated_cells[c]];

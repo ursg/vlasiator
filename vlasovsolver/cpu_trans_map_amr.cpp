@@ -2210,7 +2210,12 @@ bool trans_map_1d_amr(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>&
          for(uint i = 0; i < sourceCells.size(); ++i) {
             dz[i] = mpiGrid[sourceCells[i]]->parameters[CellParams::DX+dimension];
             if(dz[i][0] == 0) {
-              fprintf(stderr, "Dimension %c: while building pencil %u, cell %u/%i (CellID %li), dx = 0!\n", std::array<char,3>({'X','Y','Z'})[dimension], pencili, i,sourceCells.size(), mpiGrid[sourceCells[i]]->parameters[CellParams::CELLID]);
+              auto local_cells = mpiGrid.get_cells();
+              if(std::find(local_cells.begin(), local_cells.end(), sourceCells[i]) != local_cells.end()) {
+                fprintf(stderr, "Dimension %c: while building pencil %u, cell %u/%i (CellID %li, local cell), dx = 0!\n", std::array<char,3>({'X','Y','Z'})[dimension], pencili, i,sourceCells.size(), sourceCells[i]);
+              } else {
+                fprintf(stderr, "Dimension %c: while building pencil %u, cell %u/%i (CellID %li, ghost cell), dx = 0!\n", std::array<char,3>({'X','Y','Z'})[dimension], pencili, i,sourceCells.size(), sourceCells[i]);
+              }
             }
          }
          pencildz.push_back(dz);
