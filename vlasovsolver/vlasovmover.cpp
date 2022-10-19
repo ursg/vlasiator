@@ -280,6 +280,19 @@ void calculateSpatialLocalTranslation(
    phiprof::stop(trans_timer);
    MPI_Barrier(MPI_COMM_WORLD);
 
+   for (size_t c=0; c<local_propagated_cells.size(); ++c) {
+         SpatialCell* cell = mpiGrid[local_propagated_cells[c]];
+         if(cell->parameters[CellParams::DX] == 0) {
+            fprintf(stderr, "Warning: Cell %li has DX=0 before Z translation\n", local_propagated_cells[c]);
+         }
+         if(cell->parameters[CellParams::DY] == 0) {
+            fprintf(stderr, "Warning: Cell %li has DY=0 before Z translation\n", local_propagated_cells[c]);
+         }
+         if(cell->parameters[CellParams::DZ] == 0) {
+            fprintf(stderr, "Warning: Cell %li has DZ=0 before Z translation\n", local_propagated_cells[c]);
+         }
+   }
+
    // ------------- SLICE - map dist function in Z --------------- //
    if(P::zcells_ini > 1){
       phiprof::start("compute-mapping-z");
@@ -289,6 +302,19 @@ void calculateSpatialLocalTranslation(
          trans_map_1d_amr(mpiGrid,local_propagated_cells, nPencils, 2, dt,popID); // map along z//
       }
       phiprof::stop("compute-mapping-z");
+   }
+
+   for (size_t c=0; c<local_propagated_cells.size(); ++c) {
+         SpatialCell* cell = mpiGrid[local_propagated_cells[c]];
+         if(cell->parameters[CellParams::DX] == 0) {
+            fprintf(stderr, "Warning: Cell %li has DX=0 after Z translation\n", local_propagated_cells[c]);
+         }
+         if(cell->parameters[CellParams::DY] == 0) {
+            fprintf(stderr, "Warning: Cell %li has DY=0 after Z translation\n", local_propagated_cells[c]);
+         }
+         if(cell->parameters[CellParams::DZ] == 0) {
+            fprintf(stderr, "Warning: Cell %li has DZ=0 after Z translation\n", local_propagated_cells[c]);
+         }
    }
 
    // Check whether any cell's f has been emptied

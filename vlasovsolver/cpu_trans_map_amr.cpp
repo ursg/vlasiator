@@ -2209,6 +2209,9 @@ bool trans_map_1d_amr(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>&
          std::vector<Vec, aligned_allocator<Vec,WID3>> dz(sourceLength);
          for(uint i = 0; i < sourceCells.size(); ++i) {
             dz[i] = mpiGrid[sourceCells[i]]->parameters[CellParams::DX+dimension];
+            if(dz[i][0] == 0) {
+              fprintf(stderr, "Dimension %c: while building pencil %u, cell %u/%i (CellID %li), dx = 0!\n", std::array<char,3>({'X','Y','Z'})[dimension], pencili, i,sourceCells.size(), mpiGrid[sourceCells[i]]->parameters[CellParams::CELLID]);
+            }
          }
          pencildz.push_back(dz);
       }
