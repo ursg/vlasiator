@@ -753,8 +753,8 @@ void computeSpatialSourceCellsForPencil(const dccrg::Dccrg<SpatialCell,dccrg::Ca
       // Get rid of duplicate neighbor cells at single distance
       neighbors.erase(unique(neighbors.begin(), neighbors.end()), neighbors.end());
 
-      int refLvl = mpiGrid.get_refinement_level(ids.front());
-      int pathPos = 0;
+      uint refLvl = mpiGrid.get_refinement_level(ids.front());
+      uint pathPos = 0;
       if (pencils.path[iPencil].size() > refLvl) pathPos = pencils.path[iPencil][refLvl];
       if (neighbors.size() == 1) {
          if (sourceCells[iSrc+1] == neighbors.at(0)) continue; // already found this cell for different distance
@@ -832,8 +832,8 @@ void computeSpatialSourceCellsForPencil(const dccrg::Dccrg<SpatialCell,dccrg::Ca
       // Get rid of duplicate neighbor cells at single distance
       neighbors.erase(unique(neighbors.begin(), neighbors.end()), neighbors.end());
 
-      int refLvl = mpiGrid.get_refinement_level(ids.back());
-      int pathPos = 0;
+      uint refLvl = mpiGrid.get_refinement_level(ids.back());
+      uint pathPos = 0;
       if (pencils.path[iPencil].size() > refLvl) pathPos = pencils.path[iPencil][refLvl];
       if (neighbors.size() == 1) {
          if (sourceCells[iSrc-1] == neighbors.at(0)) continue; // already found this cell for different distance
