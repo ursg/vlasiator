@@ -1331,7 +1331,7 @@ void propagatePencil(
                                                                               Vec(0.0));
             for(int j=0; j<VECL; j++) {
                if(isnan(targetValues[i_trans_pt_blockv(planeVector, k, i + 1)][j])) {
-                  fprintf(stderr, "propagatePencil writing NaN to neghbour +1, target_density= %lf, dz[i] = %f, dz[i+1] = %f\n", ngbr_target_density[j], dz[i_source][j], dz[i_source+1][j]);
+                  fprintf(stderr, "propagatePencil writing NaN to neghbour +1, target_density= %f, dz[i] = %f, dz[i+1] = %f\n", ngbr_target_density[j], dz[i_source][j], dz[i_source+1][j]);
                }
             }
 
@@ -1341,7 +1341,7 @@ void propagatePencil(
                                                                               Vec(0.0));
             for(int j=0; j<VECL; j++) {
                if(isnan(targetValues[i_trans_pt_blockv(planeVector, k, i - 1)][j])) {
-                  fprintf(stderr, "propagatePencil writing NaN to neghbour -1, target_density= %f, dz[i] = %f, dz[i-1] = %lf\n", ngbr_target_density[j], dz[i_source][j], dz[i_source-1][j]);
+                  fprintf(stderr, "propagatePencil writing NaN to neghbour -1, target_density= %f, dz[i] = %f, dz[i-1] = %f\n", ngbr_target_density[j], dz[i_source][j], dz[i_source-1][j]);
                }
             }
             
@@ -1350,7 +1350,7 @@ void propagatePencil(
                values[i_trans_ps_blockv_pencil(planeVector, k, i, lengthOfPencil)] - ngbr_target_density;
             for(int j=0; j<VECL; j++) {
                if(isnan(targetValues[i_trans_pt_blockv(planeVector, k, i)][j])) {
-                  fprintf(stderr, "propagatePencil writing NaN to centre, target_density= %lf\n", ngbr_target_density[j]);
+                  fprintf(stderr, "propagatePencil writing NaN to centre, target_density= %f\n", ngbr_target_density[j]);
                }
             }
          }
