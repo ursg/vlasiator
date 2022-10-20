@@ -2050,6 +2050,21 @@ bool trans_map_1d_amr(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>&
       return false;
    }
 
+   // Sanity check
+   const vector<CellID> remote_cells = mpiGrid.get_remote_cells_on_process_boundary(FULL_NEIGHBORHOOD_ID);
+   for(const auto c : remote_cells) {
+     SpatialCell* cell = mpiGrid[c];
+     if(cell->parameters[CellParams::DX] == 0) {
+       fprintf(stderr, "Warning: Remote cell %li has DX=0 at start of trans_map_1d_amr\n", c);
+     }
+     if(cell->parameters[CellParams::DY] == 0) {
+       fprintf(stderr, "Warning: Remote cell %li has DY=0 at start of trans_map_1d_amr\n", c);
+     }
+     if(cell->parameters[CellParams::DZ] == 0) {
+       fprintf(stderr, "Warning: Remote cell %li has DZ=0 at start of trans_map_1d_amr\n", c);
+     }
+   }
+
    // Vectors of pointers to the propagated cell structs
    std::vector<SpatialCell*> propagatedCellsPointer(localPropagatedCells.size());
 
