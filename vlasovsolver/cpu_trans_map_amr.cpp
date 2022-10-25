@@ -896,7 +896,7 @@ void computeSpatialTargetCellsForPencilsWithFaces(const dccrg::Dccrg<SpatialCell
       int refLvl;
       vector <CellID> frontNeighborIds;
       vector <CellID> backNeighborIds;
-      const auto frontNeighbors = mpiGrid.get_face_neighbors_of(ids.front());
+      const auto& frontNeighbors = mpiGrid.get_face_neighbors_of(ids.front());
       if (frontNeighbors.size() > 0) {
          for (const auto& nbr: frontNeighbors) {
             if(nbr.second == (-((int)dimension + 1))) {
@@ -907,7 +907,7 @@ void computeSpatialTargetCellsForPencilsWithFaces(const dccrg::Dccrg<SpatialCell
          
          if (frontNeighborIds.size() == 0) {
             std::cerr<<"abort frontNeighborIds.size() == 0 at "<<ids.front()<<std::endl;
-            for( const auto& nbrPair: frontNeighbors ) {
+            for(const auto& nbrPair: frontNeighbors ) {
                std::cerr<<ids.front()<<" dim "<<dimension<<" "<<nbrPair.first<<" "<<nbrPair.second<<std::endl;
             }
          }
@@ -921,7 +921,7 @@ void computeSpatialTargetCellsForPencilsWithFaces(const dccrg::Dccrg<SpatialCell
       }
       frontNeighborIds.clear();
 
-      const auto backNeighbors = mpiGrid.get_face_neighbors_of(ids.back());
+      const auto& backNeighbors = mpiGrid.get_face_neighbors_of(ids.back());
       if (backNeighbors.size() > 0) {
          for (const auto& nbr: backNeighbors) {
             if(nbr.second == ((int)dimension + 1)) {
@@ -931,7 +931,7 @@ void computeSpatialTargetCellsForPencilsWithFaces(const dccrg::Dccrg<SpatialCell
          refLvl = mpiGrid.get_refinement_level(ids.back());
          if (backNeighborIds.size() == 0) {
             std::cerr<<"abort backNeighborIds.size() == 0 at "<<ids.back()<<std::endl;
-            for( const auto& nbrPair: backNeighbors ) {
+            for(const auto& nbrPair: backNeighbors ) {
                std::cerr<<ids.back()<<" dim "<<dimension<<" "<<nbrPair.first<<" "<<nbrPair.second<<std::endl;
             }
          }
@@ -1417,24 +1417,23 @@ void getSeedIds(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGr
 
       // First check negative face neighbors (A)
       // Returns all neighbors as (id, direction-dimension) pair pointers.
-      for ( const auto& faceNbrPair : mpiGrid.get_face_neighbors_of(celli) ) {
-	 if ( faceNbrPair.second == -((int)dimension + 1) ) {
-	    // Check that the neighbor is not across a periodic boundary by calculating
-	    // the distance in indices between this cell and its neighbor.
-	    auto nbrIndices = mpiGrid.mapping.get_indices(faceNbrPair.first);
+      for (const auto& faceNbrPair : mpiGrid.get_face_neighbors_of(celli) ) {
+         if ( faceNbrPair.second == -((int)dimension + 1) ) {
+            // Check that the neighbor is not across a periodic boundary by calculating
+            // the distance in indices between this cell and its neighbor.
+            auto nbrIndices = mpiGrid.mapping.get_indices(faceNbrPair.first);
 
-	    // If a neighbor is non-local, across a periodic boundary,
-	    // or in non-periodic boundary layer >1 (non-translated cell)
-	    // then we use this cell as a seed for pencils
-	    if ( abs ( (int64_t)(myIndices[dimension] - nbrIndices[dimension]) ) >
-		 pow(2,mpiGrid.get_maximum_refinement_level()) ||
-		 //!mpiGrid.is_local(faceNbrPair.first) ||
-                 !check_is_translated(mpiGrid, faceNbrPair.first, dimension) ||
-                 !do_translate_cell(mpiGrid[faceNbrPair.first]) ) {
+            // If a neighbor is non-local, across a periodic boundary, or in
+            // non-periodic boundary layer >1 (non-translated cell)
+            // then we use this cell as a seed for pencils
+            if (abs ( (int64_t)(myIndices[dimension] - nbrIndices[dimension]) ) > pow(2,mpiGrid.get_maximum_refinement_level()) ||
+               !mpiGrid.is_local(faceNbrPair.first) ||
+               !do_translate_cell(mpiGrid[faceNbrPair.first]) ) 
+            {
                addToSeedIds = true;
                break;
-	    }
-         }
+            }
+               }
       } // finish check A
       if ( addToSeedIds ) {
 #pragma omp critical
@@ -1484,7 +1483,7 @@ void getSeedIds(const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGr
       } // Finish B check
 
       if ( addToSeedIds ) {
-#pragma omp critical
+         #pragma omp critical
          seedIds.push_back(celli);
          continue;
       }
@@ -2544,7 +2543,7 @@ void update_remote_mapping_contribution_amr(
 
       if (!ccell) continue;
 
-      const auto faceNbrs = mpiGrid.get_face_neighbors_of(c);
+      const auto& faceNbrs = mpiGrid.get_face_neighbors_of(c);
 
       vector<CellID> p_nbrs;
       vector<CellID> n_nbrs;
