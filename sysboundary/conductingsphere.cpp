@@ -104,7 +104,7 @@ namespace SBC {
       }
    }
    
-   bool Conductingsphere::initSysBoundary(
+   void Conductingsphere::initSysBoundary(
       creal& t,
       Project &project
    ) {
@@ -114,8 +114,6 @@ namespace SBC {
       // iniSysBoundary is only called once, generateTemplateCell must 
       // init all particle species
       generateTemplateCell(project);
-      
-      return true;
    }
 
    Real getR(creal x,creal y,creal z, uint geometry, Real center[3]) {
@@ -146,7 +144,7 @@ namespace SBC {
       return r;
    }
    
-   bool Conductingsphere::assignSysBoundary(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
+   void Conductingsphere::assignSysBoundary(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
                                       FsGrid< fsgrids::technical, FS_STENCIL_WIDTH> & technicalGrid) {
       const vector<CellID>& cells = getLocalCells();
       for(uint i=0; i<cells.size(); i++) {
@@ -167,10 +165,9 @@ namespace SBC {
          }
       }
 
-      return true;
    }
 
-   bool Conductingsphere::applyInitialState(
+   void Conductingsphere::applyInitialState(
       const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
       FsGrid< fsgrids::technical, FS_STENCIL_WIDTH> & technicalGrid,
       FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, FS_STENCIL_WIDTH> & perBGrid,
@@ -185,7 +182,6 @@ namespace SBC {
          for (uint popID=0; popID<getObjectWrapper().particleSpecies.size(); ++popID)
             setCellFromTemplate(cell,popID);
       }
-      return true;
    }
 
    std::array<Real, 3> Conductingsphere::fieldSolverGetNormalDirection(
