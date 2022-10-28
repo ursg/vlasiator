@@ -250,6 +250,7 @@ namespace SBC {
             break;
          default:
             cerr << __FILE__ << ":" << __LINE__ << ":" << " Invalid component" << endl;
+            abort_mpi("Invalid component", 1);
       }
    }
    
@@ -280,7 +281,7 @@ namespace SBC {
             volGrid0->at(fsgrids::volfields::dPERBYVOLdz) = 0.0;
             break;
          default:
-            cerr << __FILE__ << ":" << __LINE__ << ":" << " Invalid component" << endl;
+         abort_mpi("Invalid component", 1);
       }
    }
    
@@ -299,8 +300,7 @@ namespace SBC {
       const CellID closestCell = getTheClosestNonsysboundaryCell(cellID);
       
       if(closestCell == INVALID_CELLID) {
-         cerr << __FILE__ << ":" << __LINE__ << ": No closest cell found!" << endl;
-         abort();
+         abort_mpi("No closest cell found!", 1);
       }
       
       copyCellData(mpiGrid[closestCell],mpiGrid[cellID], copyMomentsOnly, popID, calculate_V_moments);
@@ -317,8 +317,7 @@ namespace SBC {
       const vector<CellID>& closestCells = getAllClosestNonsysboundaryCells(cellID);
       
       if(closestCells[0] == INVALID_CELLID) {
-         cerr << __FILE__ << ":" << __LINE__ << ": No closest cell found!" << endl;
-         abort();
+         abort_mpi("No closest cell found!", 1);
       }
       averageCellData(mpiGrid, closestCells, mpiGrid[cellID], popID);
    }
@@ -334,8 +333,7 @@ namespace SBC {
       const vector<CellID>& closeCells = getAllCloseNonsysboundaryCells(cellID);
       
       if(closeCells[0] == INVALID_CELLID) {
-         cerr << __FILE__ << ":" << __LINE__ << ": No close cell found!" << endl;
-         abort();
+         abort_mpi("No close cell found!", 1);
       }
       averageCellData(mpiGrid, closeCells, mpiGrid[cellID], popID, fluffiness);
    }
@@ -354,8 +352,7 @@ namespace SBC {
       SpatialCell * to = mpiGrid[cellID];
       
       if(closestCell == INVALID_CELLID) {
-         cerr << __FILE__ << ":" << __LINE__ << ": No closest cell found!" << endl;
-         abort();
+         abort_mpi("No closest cell found!", 1);
       }
       
       const array<SpatialCell*,27>& flowtoCells = getFlowtoCells(cellID);
@@ -924,9 +921,8 @@ namespace SBC {
          }
       }
 
-      if(closestCells.size() == 0) {
-         cerr << __FILE__ << ":" << __LINE__ << ": No closest cell found!" << endl;
-         abort();
+      if (closestCells.size() == 0) {
+         abort_mpi("No closest cell found!", 1);
       }
 
       return bGrid.get(closestCells[0][0], closestCells[0][1], closestCells[0][2])->at(fsgrids::bfield::PERBX+component);
