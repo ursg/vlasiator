@@ -928,5 +928,8 @@ namespace SBC {
 
    std::string Conductingsphere::getName() const {return "Conductingsphere";}
    
+   void Conductingsphere::updateState(const dccrg::Dccrg<SpatialCell, dccrg::Cartesian_Geometry>& mpiGrid,
+                              FsGrid<std::array<Real, fsgrids::bfield::N_BFIELD>, 2>& perBGrid, creal t) {}
+
    uint Conductingsphere::getIndex() const {return sysboundarytype::CONDUCTINGSPHERE;}
 }
