@@ -170,8 +170,8 @@ namespace SBC {
       cint i,
       cint j,
       cint k,
-      creal& dt,
-      cuint& component
+      creal dt,
+      cuint component
    ) {
       Real result = 0.0;
       const array<int, 3> globalIndices = technicalGrid.getGlobalIndices(i,j,k);
@@ -260,8 +260,8 @@ namespace SBC {
       cint i,
       cint j,
       cint k,
-      cuint& RKCase,
-      cuint& component
+      cuint RKCase,
+      cuint component
    ) {
       this->setCellDerivativesToZero(dPerBGrid, dMomentsGrid, i, j, k, component);
    }
@@ -271,7 +271,7 @@ namespace SBC {
       cint i,
       cint j,
       cint k,
-      cuint& component
+      cuint component
    ) {
       this->setCellBVOLDerivativesToZero(volGrid, i, j, k, component);
    }
