@@ -926,6 +926,7 @@ namespace SBC {
       copyCellData(&templateCell,cell,true,popID,false); // don't copy vdf again but copy _R now
    }
 
+   void Conductingsphere::getFaces(bool *faces) {}
    std::string Conductingsphere::getName() const {return "Conductingsphere";}
    
    void Conductingsphere::updateState(const dccrg::Dccrg<SpatialCell, dccrg::Cartesian_Geometry>& mpiGrid,

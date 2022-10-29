@@ -457,6 +457,7 @@ namespace SBC {
          creal t
       );
       
+      virtual void getFaces(bool *faces);
       virtual std::string getName() const;
       virtual uint getIndex() const;
       static Real radius; /*!< Radius of the inner simulation boundary */
