@@ -384,9 +384,9 @@ int main(int argn,char* args[]) {
 							    convert<int>(P::ycells_ini * pow(2,P::amrMaxSpatialRefLevel)),
 							    convert<int>(P::zcells_ini * pow(2,P::amrMaxSpatialRefLevel))};
 
-   std::array<bool,3> periodicity{sysBoundaries.isBoundaryPeriodic(0),
-                                  sysBoundaries.isBoundaryPeriodic(1),
-                                  sysBoundaries.isBoundaryPeriodic(2)};
+   std::array<bool,3> periodicity{sysBoundaries.isPeriodic(0),
+                                  sysBoundaries.isPeriodic(1),
+                                  sysBoundaries.isPeriodic(2)};
 
    FsGridCouplingInformation gridCoupling;
    FsGrid< std::array<Real, fsgrids::bfield::N_BFIELD>, FS_STENCIL_WIDTH> perBGrid(fsGridDimensions, comm, periodicity,gridCoupling);
