@@ -66,22 +66,22 @@ namespace SBC {
       for(uint i=0; i<6; i++) {
          isThisCellOnAFace[i] = false;
       }
-      if(x > Parameters::xmax - 2.0*dx) {
+      if(x > Parameters::xmax - dx) {
          isThisCellOnAFace[0] = true;
       }
-      if(x < Parameters::xmin + 2.0*dx) {
+      if(x < Parameters::xmin + dx) {
          isThisCellOnAFace[1] = true;
       }
-      if(y > Parameters::ymax - 2.0*dy) {
+      if(y > Parameters::ymax - dy) {
          isThisCellOnAFace[2] = true;
       }
-      if(y < Parameters::ymin + 2.0*dy) {
+      if(y < Parameters::ymin + dy) {
          isThisCellOnAFace[3] = true;
       }
-      if(z > Parameters::zmax - 2.0*dz) {
+      if(z > Parameters::zmax - dz) {
          isThisCellOnAFace[4] = true;
       }
-      if(z < Parameters::zmin + 2.0*dz) {
+      if(z < Parameters::zmin + dz) {
          isThisCellOnAFace[5] = true;
       }
       if(excludeSlicesAndPeriodicDimensions == true) {
@@ -98,6 +98,30 @@ namespace SBC {
             isThisCellOnAFace[5] = false;
          }
       }
+   }
+
+   // Wrapper for previous funciton, using std::array and SpatialCell. Additionally returns true if any element is true.
+   void SysBoundaryCondition::determineFace(
+      std::array<bool, 6> &isThisCellOnAFace,
+      SpatialCell *cell,
+      const bool excludeSlicesAndPeriodicDimensions //=false (default)
+   ) {
+      creal* const cellParams = &(cell->parameters[0]);
+      creal dx = cellParams[CellParams::DX];
+      creal dy = cellParams[CellParams::DY];
+      creal dz = cellParams[CellParams::DZ];
+      creal x = cellParams[CellParams::XCRD] + 0.5*dx;
+      creal y = cellParams[CellParams::YCRD] + 0.5*dy;
+      creal z = cellParams[CellParams::ZCRD] + 0.5*dz;
+
+      if (cellParams[CellParams::DX] == 0) {
+         std::cerr << "Warning, cell coordinates not initialized in " << __FILE__ << ":" << __LINE__ << std::endl;
+      }
+
+
+      isThisCellOnAFace.fill(false);
+      determineFace(isThisCellOnAFace.data(), x, y, z, dx, dy, dz, excludeSlicesAndPeriodicDimensions);
+      return;
    }
    
    /*! SysBoundaryCondition base class constructor. The constructor is empty.*/
@@ -250,7 +274,7 @@ namespace SBC {
          cerr << __FILE__ << ":" << __LINE__ << ": No closest cell found!" << endl;
          abort();
       }
-      averageCellData(mpiGrid, closestCells, mpiGrid[cellID], popID, calculate_V_moments);
+      averageCellData(mpiGrid, closestCells, mpiGrid[cellID], popID);
    }
    
    /*! Function used to average and copy the distribution and moments from all the close sysboundarytype::NOT_SYSBOUNDARY cells.
@@ -267,7 +291,7 @@ namespace SBC {
          cerr << __FILE__ << ":" << __LINE__ << ": No close cell found!" << endl;
          abort();
       }
-      averageCellData(mpiGrid, closeCells, mpiGrid[cellID], popID, calculate_V_moments, fluffiness);
+      averageCellData(mpiGrid, closeCells, mpiGrid[cellID], popID, fluffiness);
    }
    
    /*! Function used to copy the distribution from (one of) the closest sysboundarytype::NOT_SYSBOUNDARY cell but limiting to values no higher than where it can flow into. Moments are recomputed.
@@ -402,12 +426,11 @@ namespace SBC {
     * \param cellList Vector of cells to copy from.
     * \param to Pointer to cell in which to set the averaged distribution.
     */
-   void SysBoundaryCondition::averageCellData(
+   void averageCellData(
          const dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
          const vector<CellID> cellList,
          SpatialCell *to,
          const uint popID,
-         const bool calculate_V_moments,
          creal fluffiness /* default =0.0*/
    ) {
       const size_t numberOfCells = cellList.size();
@@ -604,7 +627,7 @@ namespace SBC {
       const vector<CellID> & local_cells_on_boundary
    ) {
       // Loop over cellids
-      for( vector<CellID>::const_iterator it = local_cells_on_boundary.begin(); it != local_cells_on_boundary.end(); ++it ) {
+      for(vector<CellID>::const_iterator it = local_cells_on_boundary.begin(); it != local_cells_on_boundary.end(); ++it) {
          const CellID cellId = *it;
          vector<CellID> & closestCells = allClosestNonsysboundaryCells[cellId];
          closestCells.clear();
@@ -614,59 +637,74 @@ namespace SBC {
          flowtoCells.fill(NULL);
          uint dist = numeric_limits<uint>::max();
 
-	 uint d2 = numeric_limits<uint>::max();
-	 int indexstep = pow(2,P::amrMaxSpatialRefLevel - mpiGrid[cellId]->SpatialCell::parameters[CellParams::REFINEMENT_LEVEL]);
-	 // Note this must be int, not uint, for latter calculations
+         uint d2 = numeric_limits<uint>::max();
+         // int indexstep = pow(2,P::amrMaxSpatialRefLevel - mpiGrid[cellId]->SpatialCell::parameters[CellParams::REFINEMENT_LEVEL]);
+         // Note this must be int, not uint, for latter calculations
 
-	 // Find flowto cells (note, L2 cells do not have flowto cells)
-	 auto* nearNbrs = mpiGrid.get_neighbors_of(cellId, NEAREST_NEIGHBORHOOD_ID);
-	 for (auto nbrPair : *nearNbrs) {
-	    if(nbrPair.first != INVALID_CELLID) {
-	       if(mpiGrid[nbrPair.first]->sysBoundaryFlag == sysboundarytype::NOT_SYSBOUNDARY) {
-		  flowtoCells.at((int)(nbrPair.second[0]/indexstep) + 3*(int)(nbrPair.second[1]/indexstep)
-                                 + 9*(int)(nbrPair.second[2]/indexstep) + 13) = mpiGrid[nbrPair.first];
-		  //flowtoCells.at(i + 3*j + 9*k + 13) = mpiGrid[cell];
-	       }
-	    }
-	 }
-	 // Find all close cells
-	 auto* Nbrs = mpiGrid.get_neighbors_of(cellId, SYSBOUNDARIES_EXTENDED_NEIGHBORHOOD_ID);
-	 for (auto nbrPair : *Nbrs) {
-	    if(nbrPair.first != INVALID_CELLID) {
-	       if(mpiGrid[nbrPair.first]->sysBoundaryFlag == sysboundarytype::NOT_SYSBOUNDARY) {
-		  // Find distance and update closestCells
-		  d2 = nbrPair.second[0]*nbrPair.second[0] + nbrPair.second[1]*nbrPair.second[1] + nbrPair.second[2]*nbrPair.second[2];
-		  // Only neighboring cells for L1
-		  if( (mpiGrid[cellId]->sysBoundaryLayer == 1) &&
-		      (abs(nbrPair.second[0]) <= indexstep) &&
-		      (abs(nbrPair.second[1]) <= indexstep) &&
-		      (abs(nbrPair.second[2]) <= indexstep) ) {		      
-		     closeCells.push_back(nbrPair.first);
-		     if(d2 == dist) {
-		        closestCells.push_back(nbrPair.first);
-		     } else if (d2 < dist) {
-		        closestCells.clear();
-			closestCells.push_back(nbrPair.first);
-			dist = d2;
-		     }
-		  }
-		  // search further for L2
-		  if(mpiGrid[cellId]->sysBoundaryLayer == 2) {
-		     closeCells.push_back(nbrPair.first);
-		     if(d2 == dist) {
-		        closestCells.push_back(nbrPair.first);
-		     } else if (d2 < dist) {
-		        closestCells.clear();
-			closestCells.push_back(nbrPair.first);
-			dist = d2;
-		     }
-		  }
-	       }
-	    }
-	 }	 
-	 
-         if(closestCells.size() == 0) closestCells.push_back(INVALID_CELLID);
-         if(closeCells.size() == 0) closeCells.push_back(INVALID_CELLID);
+         // This is broken, but also obsolete.
+         // Find flowto cells (note, L2 cells do not have flowto cells)
+         // auto* nearNbrs = mpiGrid.get_neighbors_of(cellId, NEAREST_NEIGHBORHOOD_ID);
+         // for (auto nbrPair : *nearNbrs) {
+         //    if(nbrPair.first != INVALID_CELLID) {
+         //       if(mpiGrid[nbrPair.first]->sysBoundaryFlag == sysboundarytype::NOT_SYSBOUNDARY) {
+         //          flowtoCells.at((int)(nbrPair.second[0]/indexstep) + 3*(int)(nbrPair.second[1]/indexstep) + 9*(int)(nbrPair.second[2]/indexstep) + 13) = mpiGrid[nbrPair.first];
+         //          //flowtoCells.at(i + 3*j + 9*k + 13) = mpiGrid[cell];
+         //       }
+         //    }
+         // }
+
+         // Only closer neighborhood for layer 1
+         if(mpiGrid[cellId]->sysBoundaryLayer == 1) {		      
+            for (auto nbrPair : *mpiGrid.get_neighbors_of(cellId, SYSBOUNDARIES_NEIGHBORHOOD_ID)) {
+               if(nbrPair.first != INVALID_CELLID) {
+                  CellID neighbor = nbrPair.first;
+                  if(mpiGrid[neighbor]->sysBoundaryFlag == sysboundarytype::NOT_SYSBOUNDARY) {
+                     // Find distance and update closestCells
+                     d2 = nbrPair.second[0]*nbrPair.second[0] + nbrPair.second[1]*nbrPair.second[1] + nbrPair.second[2]*nbrPair.second[2];
+                     for (auto i : *mpiGrid.get_neighbors_to(cellId, SYSBOUNDARIES_NEIGHBORHOOD_ID)) {
+                        if (i.first == neighbor) {
+                           closeCells.push_back(neighbor);
+                           if(d2 == dist) {
+                              closestCells.push_back(neighbor);
+                           } else if (d2 < dist) {
+                              closestCells.clear();
+                              closestCells.push_back(neighbor);
+                              dist = d2;
+                           }
+                        }
+                     }
+                  } 
+               }
+            }
+         }	 
+
+         // search further for L2
+         if (mpiGrid[cellId]->sysBoundaryLayer == 2) {
+            for (auto nbrPair : *mpiGrid.get_neighbors_of(cellId, SYSBOUNDARIES_EXTENDED_NEIGHBORHOOD_ID)) {
+               if(nbrPair.first != INVALID_CELLID) {
+                  CellID neighbor = nbrPair.first;
+                  if(mpiGrid[neighbor]->sysBoundaryFlag == sysboundarytype::NOT_SYSBOUNDARY) {
+                     // Find distance and update closestCells
+                     d2 = nbrPair.second[0]*nbrPair.second[0] + nbrPair.second[1]*nbrPair.second[1] + nbrPair.second[2]*nbrPair.second[2];
+                     closeCells.push_back(neighbor);
+                     if(d2 == dist) {
+                        closestCells.push_back(neighbor);
+                     } else if (d2 < dist) {
+                        closestCells.clear();
+                        closestCells.push_back(neighbor);
+                        dist = d2;
+                     }
+                  }
+               }
+            }
+         }	 
+
+         if(closestCells.size() == 0) {
+            closestCells.push_back(INVALID_CELLID);
+         }
+         if(closeCells.size() == 0) {
+            closeCells.push_back(INVALID_CELLID);
+         }
       }
       return true;
    }
@@ -878,4 +916,40 @@ namespace SBC {
    
    /*! Get a bool telling whether to call again applyInitialState upon restarting the simulation. */
    bool SysBoundaryCondition::doApplyUponRestart() const {return this->applyUponRestart;}
+
+   bool OuterBoundaryCondition::assignSysBoundary(dccrg::Dccrg<SpatialCell,dccrg::Cartesian_Geometry>& mpiGrid,
+                                 FsGrid< fsgrids::technical, FS_STENCIL_WIDTH> & technicalGrid) {
+
+      bool doAssign;
+      array<bool,6> isThisCellOnAFace;
+      
+      // Assign boundary flags to local DCCRG cells
+      const vector<CellID>& cells = getLocalCells();
+      for(const auto& dccrgId : cells) {
+         SpatialCell* cell = mpiGrid[dccrgId];
+         if (cell->sysBoundaryFlag == sysboundarytype::DO_NOT_COMPUTE) 
+            continue;
+         determineFace(isThisCellOnAFace, cell);
+         
+         // Comparison of the array defining which faces to use and the array telling on which faces this cell is
+         doAssign = false;
+         for (int j=0; j<6; j++) 
+            doAssign = doAssign || (facesToProcess[j] && isThisCellOnAFace[j]);
+         const auto nbrs = mpiGrid.get_face_neighbors_of(dccrgId);
+         for (uint j = 0; j < nbrs.size(); j++) {
+            CellID neighbor = nbrs[j].first;
+            if (neighbor) {
+               determineFace(isThisCellOnAFace, mpiGrid[neighbor]);
+               for (int j=0; j<6; j++) 
+                  doAssign = doAssign || (facesToProcess[j] && isThisCellOnAFace[j]);
+            }
+         }
+         if(doAssign) {
+            mpiGrid[dccrgId]->sysBoundaryFlag = this->getIndex();
+         }         
+      }
+      
+      return true;
+   }
+
 } // namespace SBC

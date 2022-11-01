@@ -642,6 +642,14 @@ namespace DRO {
       std::string popName;
    };
 
+   class JPerBModifier: public DataReductionOperatorHasParameters {
+   public:
+      virtual bool reduceData(const SpatialCell* cell,char* buffer) {return true;}
+      virtual std::string getName() const {return "j_per_b_modifier";}
+      virtual bool getDataVectorInfo(std::string& dataType,unsigned int& dataSize,unsigned int& vectorSize) const;
+      virtual bool setSpatialCell(const SpatialCell* cell) {return true;}
+      virtual bool writeParameters(vlsv::Writer& vlsvWriter);
+   };
 } // namespace DRO
 
 #endif
