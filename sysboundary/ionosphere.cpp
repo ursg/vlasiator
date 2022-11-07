@@ -1764,6 +1764,18 @@ namespace SBC {
             Real upmappedArea = 0;
             std::array<int,3> fsc;
 
+            //// Map down FAC based on magnetosphere rotB
+            if(nodes[n].xMapped[0] == 0. && nodes[n].xMapped[1] == 0. && nodes[n].xMapped[2] == 0.) {
+               // Skip cells that couple nowhere
+               continue;
+            }
+
+            // Local cell
+            std::array<int,3> lfsc = getLocalFsGridCellIndexForCoord(technicalGrid,nodes[n].xMapped);
+            if(lfsc[0] == -1 || lfsc[1] == -1 || lfsc[2] == -1) {
+               continue;
+            }
+
             // Iterate through the elements touching that node
             for(uint e=0; e<nodes[n].numTouchingElements; e++) {
                const Element& el= elements[nodes[n].touchingElements[e]];
@@ -1780,6 +1792,23 @@ namespace SBC {
                   B[c][2] = corner.parameters[ionosphereParameters::UPMAPPED_BZ];
                }
 
+               // Get current through the whole set of touching elements by
+               // integrating around the outer boundary and summing B dS
+               // Note: We can't just take the B at the centre of the element
+               // (because that would be constant, and not have a curl), but
+               // we'll take the value at a corner opposite to each edge. Since
+               // that is twice as far away as the centre, we divide by two
+               // further down.
+               FACinput[n] += B[0][0] * (nodes[el.corners[1]].xMapped[0] - nodes[el.corners[2]].xMapped[0])
+                             +B[0][1] * (nodes[el.corners[1]].xMapped[1] - nodes[el.corners[2]].xMapped[1])
+                             +B[0][2] * (nodes[el.corners[1]].xMapped[2] - nodes[el.corners[2]].xMapped[2]);
+               FACinput[n] += B[1][0] * (nodes[el.corners[2]].xMapped[0] - nodes[el.corners[0]].xMapped[0])
+                             +B[1][1] * (nodes[el.corners[2]].xMapped[1] - nodes[el.corners[0]].xMapped[1])
+                             +B[1][2] * (nodes[el.corners[2]].xMapped[2] - nodes[el.corners[0]].xMapped[2]);
+               FACinput[n] += B[2][0] * (nodes[el.corners[0]].xMapped[0] - nodes[el.corners[1]].xMapped[0])
+                             +B[2][1] * (nodes[el.corners[0]].xMapped[1] - nodes[el.corners[1]].xMapped[1])
+                             +B[2][2] * (nodes[el.corners[0]].xMapped[2] - nodes[el.corners[1]].xMapped[2]);
+
                // Also sum up touching elements' areas and upmapped areas to compress
                // density and temperature with them
                // TODO: Precalculate this?
@@ -1791,44 +1820,34 @@ namespace SBC {
                   (B[0][2] + B[1][2] + B[2][2]) / 3.};
                upmappedArea += fabs(areaVector[0] * avgB[0] + areaVector[1]*avgB[1] + areaVector[2]*avgB[2]) /
                   sqrt(avgB[0]*avgB[0] + avgB[1]*avgB[1] + avgB[2]*avgB[2]);
+
             }
 
             // Divide by 3, as every element will be counted from each of its
             // corners.  Prevent areas from being multiply-counted
             area /= 3.;
             upmappedArea /= 3.;
-
-            //// Map down FAC based on magnetosphere rotB
-            if(nodes[n].xMapped[0] == 0. && nodes[n].xMapped[1] == 0. && nodes[n].xMapped[2] == 0.) {
-               // Skip cells that couple nowhere
-               continue;
-            }
-
-            // Local cell
-            std::array<int,3> lfsc = getLocalFsGridCellIndexForCoord(technicalGrid,nodes[n].xMapped);
-            if(lfsc[0] == -1 || lfsc[1] == -1 || lfsc[2] == -1) {
-               continue;
-            }
+            FACinput[n] /= 6. * physicalconstants::MU_0;
 
             // Calc curlB, note division by DX one line down
-            const std::array<Real, 3> curlB = interpolateCurlB(
-               perBGrid,
-               dPerBGrid,
-               technicalGrid,
-               reconstructionCoefficientsCache,
-               lfsc[0],lfsc[1],lfsc[2],
-               nodes[n].xMapped
-            );
+            //const std::array<Real, 3> curlB = interpolateCurlB(
+            //   perBGrid,
+            //   dPerBGrid,
+            //   technicalGrid,
+            //   reconstructionCoefficientsCache,
+            //   lfsc[0],lfsc[1],lfsc[2],
+            //   nodes[n].xMapped
+            //);
 
             // Dot with normalized B, scale by area
-            FACinput[n] = upmappedArea * (nodes[n].parameters[ionosphereParameters::UPMAPPED_BX]*curlB[0] + nodes[n].parameters[ionosphereParameters::UPMAPPED_BY]*curlB[1] + nodes[n].parameters[ionosphereParameters::UPMAPPED_BZ]*curlB[2])
-               / (
-                  sqrt(
-                     nodes[n].parameters[ionosphereParameters::UPMAPPED_BX]*nodes[n].parameters[ionosphereParameters::UPMAPPED_BX]
-                     + nodes[n].parameters[ionosphereParameters::UPMAPPED_BY]*nodes[n].parameters[ionosphereParameters::UPMAPPED_BY]
-                     + nodes[n].parameters[ionosphereParameters::UPMAPPED_BZ]*nodes[n].parameters[ionosphereParameters::UPMAPPED_BZ]
-               ) * physicalconstants::MU_0 * technicalGrid.DX
-            );
+            //FACinput[n] = upmappedArea * (nodes[n].parameters[ionosphereParameters::UPMAPPED_BX]*curlB[0] + nodes[n].parameters[ionosphereParameters::UPMAPPED_BY]*curlB[1] + nodes[n].parameters[ionosphereParameters::UPMAPPED_BZ]*curlB[2])
+            //   / (
+            //      sqrt(
+            //         nodes[n].parameters[ionosphereParameters::UPMAPPED_BX]*nodes[n].parameters[ionosphereParameters::UPMAPPED_BX]
+            //         + nodes[n].parameters[ionosphereParameters::UPMAPPED_BY]*nodes[n].parameters[ionosphereParameters::UPMAPPED_BY]
+            //         + nodes[n].parameters[ionosphereParameters::UPMAPPED_BZ]*nodes[n].parameters[ionosphereParameters::UPMAPPED_BZ]
+            //   ) * physicalconstants::MU_0 * technicalGrid.DX
+            //);
 
             // By definition, a downwards current into the ionosphere has a positive FAC value,
             // as it corresponds to positive divergence of horizontal current in the ionospheric plane.
