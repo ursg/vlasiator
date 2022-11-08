@@ -1792,23 +1792,6 @@ namespace SBC {
                   B[c][2] = corner.parameters[ionosphereParameters::UPMAPPED_BZ];
                }
 
-               // Get current through the whole set of touching elements by
-               // integrating around the outer boundary and summing B dS
-               // Note: We can't just take the B at the centre of the element
-               // (because that would be constant, and not have a curl), but
-               // we'll take the value at a corner opposite to each edge. Since
-               // that is twice as far away as the centre, we divide by two
-               // further down.
-               FACinput[n] += B[0][0] * (nodes[el.corners[1]].xMapped[0] - nodes[el.corners[2]].xMapped[0])
-                             +B[0][1] * (nodes[el.corners[1]].xMapped[1] - nodes[el.corners[2]].xMapped[1])
-                             +B[0][2] * (nodes[el.corners[1]].xMapped[2] - nodes[el.corners[2]].xMapped[2]);
-               FACinput[n] += B[1][0] * (nodes[el.corners[2]].xMapped[0] - nodes[el.corners[0]].xMapped[0])
-                             +B[1][1] * (nodes[el.corners[2]].xMapped[1] - nodes[el.corners[0]].xMapped[1])
-                             +B[1][2] * (nodes[el.corners[2]].xMapped[2] - nodes[el.corners[0]].xMapped[2]);
-               FACinput[n] += B[2][0] * (nodes[el.corners[0]].xMapped[0] - nodes[el.corners[1]].xMapped[0])
-                             +B[2][1] * (nodes[el.corners[0]].xMapped[1] - nodes[el.corners[1]].xMapped[1])
-                             +B[2][2] * (nodes[el.corners[0]].xMapped[2] - nodes[el.corners[1]].xMapped[2]);
-
                // Also sum up touching elements' areas and upmapped areas to compress
                // density and temperature with them
                // TODO: Precalculate this?
@@ -1820,6 +1803,25 @@ namespace SBC {
                   (B[0][2] + B[1][2] + B[2][2]) / 3.};
                upmappedArea += fabs(areaVector[0] * avgB[0] + areaVector[1]*avgB[1] + areaVector[2]*avgB[2]) /
                   sqrt(avgB[0]*avgB[0] + avgB[1]*avgB[1] + avgB[2]*avgB[2]);
+
+               if( areaVector[0]*areaVector[0] + areaVector[1]*areaVector[1] + areaVector[2]*areaVector[2] != 0) {
+                  // Get current through the whole set of touching elements by
+                  // integrating around the outer boundary and summing B dS
+                  // Note: We can't just take the B at the centre of the element
+                  // (because that would be constant, and not have a curl), but
+                  // we'll take the value at a corner opposite to each edge. Since
+                  // that is twice as far away as the centre, we divide by two
+                  // further down.
+                  FACinput[n] += B[0][0] * (nodes[el.corners[1]].xMapped[0] - nodes[el.corners[2]].xMapped[0])
+                                +B[0][1] * (nodes[el.corners[1]].xMapped[1] - nodes[el.corners[2]].xMapped[1])
+                                +B[0][2] * (nodes[el.corners[1]].xMapped[2] - nodes[el.corners[2]].xMapped[2]);
+                  FACinput[n] += B[1][0] * (nodes[el.corners[2]].xMapped[0] - nodes[el.corners[0]].xMapped[0])
+                                +B[1][1] * (nodes[el.corners[2]].xMapped[1] - nodes[el.corners[0]].xMapped[1])
+                                +B[1][2] * (nodes[el.corners[2]].xMapped[2] - nodes[el.corners[0]].xMapped[2]);
+                  FACinput[n] += B[2][0] * (nodes[el.corners[0]].xMapped[0] - nodes[el.corners[1]].xMapped[0])
+                                +B[2][1] * (nodes[el.corners[0]].xMapped[1] - nodes[el.corners[1]].xMapped[1])
+                                +B[2][2] * (nodes[el.corners[0]].xMapped[2] - nodes[el.corners[1]].xMapped[2]);
+               }
 
             }
 
