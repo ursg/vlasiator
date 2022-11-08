@@ -426,6 +426,7 @@ namespace sysboundarytype {
       OUTFLOW,          /*!< No fixed conditions on the fields and distribution function. */
       MAXWELLIAN,       /*!< Set Maxwellian boundary condition, i.e. set fields and distribution function. */
       CONDUCTINGSPHERE, /*!< A perfectly conducting sphere as a simple inner boundary. */
+      USER,             /*!< User-defined boundary condition. */
       N_SYSBOUNDARY_CONDITIONS
    };
 }

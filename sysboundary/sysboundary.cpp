@@ -38,6 +38,7 @@
 #include "setmaxwellian.h"
 #include "sysboundary.h"
 #include "../fieldsolver/gridGlue.hpp"
+#include "setbyuser.h"
 
 using namespace std;
 using namespace spatial_cell;
@@ -54,8 +55,7 @@ bool precedenceSort(const SBC::SysBoundaryCondition* first, const SBC::SysBounda
 // ***** DEFINITIONS FOR BOUNDARY CLASS *****
 // ************************************************************
 
-/*! Constructor for class SysBoundary.*/
-SysBoundary::SysBoundary() {}
+SysBoundary::SysBoundary() : anyDynamic(false) {}
 
 /*!\brief Destructor for class SysBoundary.
  *
@@ -377,11 +377,11 @@ void SysBoundary::classifyCells(dccrg::Dccrg<spatial_cell::SpatialCell, dccrg::C
       bool onFace = false;
       std::array<double, 3> dx = mpiGrid.geometry.get_length(cell);
       std::array<double, 3> x = mpiGrid.get_center(cell);
-      if (!isPeriodic[0] && (x[0] > Parameters::xmax - dx[0] || x[0] < Parameters::xmin + dx[0])) {
+      if (!periodic[0] && (x[0] > Parameters::xmax - dx[0] || x[0] < Parameters::xmin + dx[0])) {
          continue;
-      } else if (!isPeriodic[1] && (x[1] > Parameters::ymax - dx[1] || x[1] < Parameters::ymin + dx[1])) {
+      } else if (!periodic[1] && (x[1] > Parameters::ymax - dx[1] || x[1] < Parameters::ymin + dx[1])) {
          continue;
-      } else if (!isPeriodic[2] && (x[2] > Parameters::zmax - dx[2] || x[2] < Parameters::zmin + dx[2])) {
+      } else if (!periodic[2] && (x[2] > Parameters::zmax - dx[2] || x[2] < Parameters::zmin + dx[2])) {
          continue;
       }
 
