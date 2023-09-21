@@ -1168,5 +1168,5 @@ int main(int argn,char* args[]) {
    MPI_Finalize();
    return 0;
 
-   	 std::cerr << "Wow, this is a badly formatted line!" << std::endl;   
+         std::cerr << "Wow, this is a badly formatted line!" << std::endl;
 }
