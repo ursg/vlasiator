@@ -747,7 +747,7 @@ int main(int argn,char* args[]) {
       //report filtering if we are in an AMR run 
       if (P::amrMaxSpatialRefLevel>0){
          logFile<<"Filtering Report: "<<endl;
-         for (uint refLevel=0 ; refLevel<= P::amrMaxSpatialRefLevel; refLevel++){
+         for (int refLevel=0 ; refLevel<= P::amrMaxSpatialRefLevel; refLevel++){
             logFile<<"\tRefinement Level " <<refLevel<<"==> Passes "<<P::numPasses.at(refLevel)<<endl;
          }
             logFile<<endl;
@@ -985,16 +985,15 @@ int main(int argn,char* args[]) {
       //TODO - add LB measure and do LB if it exceeds threshold
       if(((P::tstep % P::rebalanceInterval == 0 && P::tstep > P::tstep_min) || overrideRebalanceNow)) {
          logFile << "(LB): Start load balance, tstep = " << P::tstep << " t = " << P::t << endl << writeVerbose;
-         // Refinement includes LB
          if (!dtIsChanged && P::adaptRefinement && P::tstep % (P::rebalanceInterval * P::refineMultiplier) == 0 && P::t > P::refineAfter) { 
             logFile << "(AMR): Adapting refinement!"  << endl << writeVerbose;
             if (!adaptRefinement(mpiGrid, technicalGrid, sysBoundaryContainer, *project))
                continue;   // Refinement failed and we're bailing out
 
             // Calculate new dt limits since we might break CFL when refining
-            phiprof::Timer computeDtimer {"compute-dt"};
+            phiprof::Timer computeDtimer {"compute-dt-amr"};
             calculateSpatialTranslation(mpiGrid,0.0);
-            calculateAcceleration(mpiGrid,0.0);      
+            calculateAcceleration(mpiGrid,0.0);
          }
          balanceLoad(mpiGrid, sysBoundaryContainer);
          addTimedBarrier("barrier-end-load-balance");
