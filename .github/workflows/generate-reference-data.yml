@@ -1,8 +1,7 @@
 name: Generate testpackage reference data
 
-on:
-  # Only run when triggered manually
-  workflow_dispatch:
+# Only run when triggered manually
+on: workflow_dispatch
 
 jobs:
   # This should be kept identical to the build_testpackage job in github-ci.yml
@@ -35,7 +34,7 @@ jobs:
     #  with:
     #    name: Testpackage build log
     #    path: build.log
-  
+
   run_testpackage:
     # Run the testpackage on the carrington cluster
     runs-on: carrington
