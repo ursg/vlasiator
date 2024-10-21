@@ -75,3 +75,16 @@ else
    ../Zoltan/configure --prefix=$WORKSPACE/libraries${PLATFORM} --enable-mpi --with-mpi-compilers --with-gnumake --with-id-type=ullong && make -j 4 && make install
 cd ..
 fi
+
+# Build boost
+if [[ $PLATFORM == "-hile" ]]; then
+   wget https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.gz
+   tar -xzvf boost_1_86_0.tar.gz
+   rm boost_1_86_0.tar.gz
+   cd boost_1_86_0
+   ./bootstrap.sh --with-libraries=program_options --prefix=../../libraries${PLATFORM}
+   ./b2
+   ./b2 install
+   cd ..
+   rm -r boost_1_86_0
+fi
