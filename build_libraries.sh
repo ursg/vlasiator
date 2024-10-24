@@ -79,7 +79,7 @@ fi
 # Build boost
 if [[ $PLATFORM == "-hile" ]]; then
    wget https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.gz
-   tar -xzvf boost_1_86_0.tar.gz
+   tar -xzf boost_1_86_0.tar.gz
    rm boost_1_86_0.tar.gz
    cd boost_1_86_0
    ./bootstrap.sh --with-libraries=program_options --prefix=../../libraries${PLATFORM}
