@@ -437,7 +437,7 @@ jobs:
   run_testpackage_hile:
     # Run the testpackage on the carrington cluster
     runs-on: hile
-    needs: [build_testpackage_hile, build_tools_hile]
+    needs: [build_libraries_hile, build_testpackage_hile, build_tools_hile]
     continue-on-error: true
 
     steps:
@@ -453,6 +453,12 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         name: vlasiator-tools-hile
+    - name: Download libraries
+      uses: actions/download-artifact@v4
+      with:
+        name: libraries-hile
+    - name: Unpack libraries
+      run: tar --zstd -xf libraries-hile.tar.zstd
     - name: Run testpackage
       id: run
       run: |
