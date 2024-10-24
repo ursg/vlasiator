@@ -44,7 +44,7 @@ jobs:
         run: |
           . ./build_libraries.sh hile
       - name: Build libraries tar
-        run: tar --zstd -cvf libraries-hile.tar.zstd libraries-appleM1
+        run: tar --zstd -cvf libraries-hile.tar.zstd libraries-hile
       - name: Upload libraries as artifact
         uses: actions/upload-artifact@v4
         with:
