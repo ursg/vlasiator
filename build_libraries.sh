@@ -78,13 +78,17 @@ fi
 
 # Build boost
 if [[ $PLATFORM == "-hile" ]]; then
+   echo "### Downloading boost. ###"
    wget -q https://archives.boost.io/release/1.86.0/source/boost_1_86_0.tar.gz
+   echo "### Extracting boost. ###"
    tar -xzf boost_1_86_0.tar.gz
+   echo "### Building boost. ###"
    rm boost_1_86_0.tar.gz
    cd boost_1_86_0
    ./bootstrap.sh --with-libraries=program_options --prefix=../../libraries${PLATFORM}
    ./b2
-   ./b2 install
+   echo "### Installing boost. ###"
+   ./b2 install > /dev/null
    cd ..
    rm -r boost_1_86_0
 fi

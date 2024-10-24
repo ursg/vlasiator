@@ -44,7 +44,7 @@ jobs:
         run: |
           . ./build_libraries.sh hile
       - name: Build libraries tar
-        run: tar --zstd -cvf libraries-hile.tar.zstd libraries-hile
+        run: tar --zstd -cf libraries-hile.tar.zstd libraries-hile
       - name: Upload libraries as artifact
         uses: actions/upload-artifact@v4
         with:
@@ -209,7 +209,7 @@ jobs:
       with:
         name: libraries-hile
     - name: Unpack libraries
-      run: tar --zstd -xvf libraries-hile.tar.zstd
+      run: tar --zstd -xf libraries-hile.tar.zstd
     - name: Make clean
       run: VLASIATOR_ARCH=HILE_cray_cpu make clean
     - uses: ursg/gcc-problem-matcher@master
@@ -355,7 +355,7 @@ jobs:
       with:
         name: libraries-hile
     - name: Unpack libraries
-      run: tar --zstd -xvf libraries-hile.tar.zstd
+      run: tar --zstd -xf libraries-hile.tar.zstd
     - uses: ursg/gcc-problem-matcher@master
     - name: Make clean
       run: VLASIATOR_ARCH=HILE_cray_cpu make clean
