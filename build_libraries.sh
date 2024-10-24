@@ -87,7 +87,7 @@ if [[ $PLATFORM == "-hile" ]]; then
    echo "### Building boost. ###"
    rm boost_1_86_0.tar.gz
    cd boost_1_86_0
-   ./bootstrap.sh --with-libraries=program_options --prefix=../../libraries${PLATFORM}
+   ./bootstrap.sh --with-libraries=program_options --prefix=$WORKSPACE/libraries${PLATFORM}
    ./b2
    echo "### Installing boost. ###"
    ./b2 install > /dev/null
