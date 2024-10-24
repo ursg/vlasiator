@@ -35,6 +35,24 @@ jobs:
           retention-days: 5
           if-no-files-found: error
 
+  build_Libraries_hile:
+    runs-on: hile
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Run library build script
+        run: |
+          . ./build_libraries.sh hile
+      - name: Build libraries tar
+        run: tar --zstd -cvf libraries-hile.tar.zstd libraries-appleM1
+      - name: Upload libraries as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libraries-hile
+          path: libraries-hile.tar.zstd
+          retention-days: 5
+          if-no-files-found: error
+
   build_libraries_appleM1:
     # Build libraries on macos with M1 hardware, to test both macOS and aarch64 compatibility
     runs-on: macos-14
@@ -125,7 +143,7 @@ jobs:
         if-no-files-found: error
 
 
-  build_testpackage:
+  build_testpackage_carrington:
     # Build Vlasiator with testpackage flags, on the carrington cluster
     # (for subsequent running of the integration test package)
     runs-on: carrington
@@ -161,7 +179,7 @@ jobs:
     - name: Upload testpackage binary
       uses: actions/upload-artifact@v4
       with:
-        name: vlasiator-testpackage
+        name: vlasiator-testpackage-carrington
         path: vlasiator
         if-no-files-found: error
     #- name: Upload build log
@@ -169,6 +187,49 @@ jobs:
     #  with:
     #    name: Testpackage build log
     #    path: build.log
+
+  build_testpackage_hile:
+    # Build Vlasiator with testpackage flags, on the hile machine
+    # (for subsequent running of the integration test package)
+    runs-on: hile
+    needs: build_libraries_hile
+
+    steps:
+    - name: Clean workspace
+      run: |
+        rm -rf libraries library-build testpackage
+        rm -f libraries.tar.zst testpackage_check_description.txt testpackage-output.tar.gz metrics.txt stdout.txt stderr.txt testpackage_output_variables.txt
+        rm -f *.xml
+    - name: Checkout source
+      uses: actions/checkout@v4
+      with:
+        submodules: true
+    - name: Download libraries
+      uses: actions/download-artifact@v4
+      with:
+        name: libraries-hile
+    - name: Unpack libraries
+      run: tar --zstd -xvf libraries-hile.tar.zstd
+    - name: Make clean
+      run: VLASIATOR_ARCH=HILE_cray_cpu make clean
+    - uses: ursg/gcc-problem-matcher@master
+    - name: Compile vlasiator (Testpackage build)
+      run: |
+        export VLASIATOR_ARCH=HILE_cray_cpu
+        make -j 32 testpackage
+    - name: Make sure the output binary is visible in lustre
+      uses: nick-fields/retry@v3
+      with:
+        timeout_seconds: 15
+        max_attempts: 3
+        retry_on: error
+        command: ls vlasiator
+    - name: Upload testpackage binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: vlasiator-testpackage-hile
+        path: vlasiator
+        if-no-files-found: error
 
   build_riscv:
     runs-on: risc-v
@@ -240,7 +301,7 @@ jobs:
         VLASIATOR_ARCH=appleM1 make clean
         VLASIATOR_ARCH=appleM1 make -j 3
 
-  build_tools:
+  build_tools_carrington:
     # Build vlsvdiff and vlsvextract for testpackage use
     runs-on: carrington
 
@@ -268,16 +329,53 @@ jobs:
     - name: Upload tools binaries
       uses: actions/upload-artifact@v4
       with:
-        name: vlasiator-tools
+        name: vlasiator-tools-carrington
         path: |
           vlsvextract_DP
           vlsvdiff_DP
         if-no-files-found: error
 
-  run_testpackage:
+  build_tools_hile:
+    # Build vlsvdiff and vlsvextract for testpackage use
+    runs-on: hile
+    needs: build_libraries_hile
+
+    steps:
+    - name: Clean workspace
+      run: |
+        rm -rf libraries library-build testpackage
+        rm -f libraries.tar.zstd testpackage_check_description.txt testpackage-output.tar.gz metrics.txt stdout.txt stderr.txt testpackage_output_variables.txt
+        rm -f *.xml
+    - name: Checkout source
+      uses: actions/checkout@v4
+      with:
+        submodules: true
+    - name: Download libraries
+      uses: actions/download-artifact@v4
+      with:
+        name: libraries-hile
+    - name: Unpack libraries
+      run: tar --zstd -xvf libraries-hile.tar.zstd
+    - uses: ursg/gcc-problem-matcher@master
+    - name: Make clean
+      run: VLASIATOR_ARCH=HILE_cray_cpu make clean
+    - name: Compile tools
+      run: |
+        export VLASIATOR_ARCH=HILE_cray_cpu
+        make -j 16 vlsvextract vlsvdiff
+    - name: Upload tools binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: vlasiator-tools-hile
+        path: |
+          vlsvextract_DP
+          vlsvdiff_DP
+        if-no-files-found: error
+
+  run_testpackage_carrington:
     # Run the testpackage on the carrington cluster
     runs-on: carrington
-    needs: [build_testpackage, build_tools]
+    needs: [build_testpackage_carrington, build_tools_carrington]
     continue-on-error: true
 
     steps:
@@ -288,11 +386,11 @@ jobs:
     - name: Download testpackage binary
       uses: actions/download-artifact@v4
       with:
-        name: vlasiator-testpackage
+        name: vlasiator-testpackage-carrington
     - name: Download tools
       uses: actions/download-artifact@v4
       with:
-        name: vlasiator-tools
+        name: vlasiator-tools-carrington
     - name: Run testpackage
       id: run
       run: |
