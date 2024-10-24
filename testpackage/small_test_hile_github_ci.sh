@@ -34,7 +34,7 @@ nodes=$SLURM_NNODES
 #Carrington has 4 x 32 cores
 cores_per_node=128
 # Hyperthreading
-ht=2
+ht=1
 #Change PBS parameters above + the ones here
 total_units=$(echo $nodes $cores_per_node $ht | gawk '{print $1*$2*$3}')
 units_per_node=$(echo $cores_per_node $ht | gawk '{print $1*$2}')
