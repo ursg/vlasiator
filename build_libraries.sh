@@ -93,3 +93,6 @@ if [[ $PLATFORM == "-hile" ]]; then
    ./b2 install > /dev/null
    cd ..
 fi
+
+# Clean up build directory
+rm -rf $BUILDDIR
