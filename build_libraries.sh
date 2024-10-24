@@ -18,7 +18,7 @@ rm -rf library-build libraries${PLATFORM}
 mkdir -p libraries${PLATFORM}/include
 mkdir -p libraries${PLATFORM}/lib
 
-BUILDDIR=`mktemp -t -d vlsiator-library-build-XXXXX`
+BUILDDIR=`mktemp -d "${TMPDIR:-/tmp}/vlsiator-library-build-XXXXX`
 ln -s $BUILDDIR library-build
 cd library-build
 
