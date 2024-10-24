@@ -1,11 +1,11 @@
 #!/bin/bash
-#SBATCH -t 01:30:00        # Run time (hh:mm:ss)
+#SBATCH -t 00:30:00        # Run time (hh:mm:ss)
 #SBATCH --job-name=CI_testpackage
 #SBATCH -p cpu
 #SBATCH --exclusive
 #SBATCH --nodes=1
 #SBATCH -c 8                 # CPU cores per task
-#SBATCH -n 32                  # number of tasks
+#SBATCH -n 16                  # number of tasks
 #SBATCH --mem=0
 
 #If 1, the reference vlsv files are generated
@@ -31,8 +31,8 @@ echo "SLURM_JOB_ID=$SLURM_JOB_ID" >> $GITHUB_OUTPUT
 #--------------------------------------------------------------------
 #---------------------DO NOT TOUCH-----------------------------------
 nodes=$SLURM_NNODES
-#Carrington has 4 x 64 cores
-cores_per_node=256
+#Carrington has 4 x 32 cores
+cores_per_node=128
 # Hyperthreading
 ht=2
 #Change PBS parameters above + the ones here
