@@ -481,7 +481,6 @@ void SysBoundary::classifyCells(dccrg::Dccrg<spatial_cell::SpatialCell, dccrg::C
          creal x = mpiGrid[cells[i]]->parameters[CellParams::XCRD]+ mpiGrid[cells[i]]->parameters[CellParams::DX];
          creal y = mpiGrid[cells[i]]->parameters[CellParams::YCRD]+ mpiGrid[cells[i]]->parameters[CellParams::DY];
          creal z = mpiGrid[cells[i]]->parameters[CellParams::ZCRD]+ mpiGrid[cells[i]]->parameters[CellParams::DZ];
-         creal radius2 = x*x + y*y + z*z;
       }
    }
 
