@@ -104,7 +104,7 @@ jobs:
 
           - name: lumi-c
             runner: lumi
-            arch: lumi_gnu_2403
+            arch: lumi_2403
             compile_tp: true
             run_tp: true
             debug: true
