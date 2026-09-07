@@ -15,6 +15,7 @@ core_flags["ukko_dgx"]="-n 1 -c 64"
 core_flags["pioneer"]="-n 1 -c 64"
 core_flags["hile_gpu"]="-n 1 -c 16"
 core_flags["hile_cpu"]="-n 1 -c 16"
+core_flags["lumi_2403"]="-n 1 -c 16"
 
 #Constraints for compiling stuff
 declare -A constraint
@@ -24,6 +25,7 @@ constraint["ukko_dgx"]="--constraint=ukko -p gpu"
 constraint["pioneer"]="-p pioneer -t 01:00:00" #not sure if pty needed for pioneer
 constraint["hile_gpu"]="-C g"
 constraint["hile_cpu"]="-C c"
+constraint["lumi_2403"]="--partition=standard"
 
 #Constraints used for smaller jobs like compiling/removing files/catting etc
 declare -A constraint_small
@@ -32,6 +34,7 @@ constraint_small["ukko_dgx"]="--constraint=ukko"
 constraint_small["pioneer"]="-p pioneer -t 01:00:00"
 constraint_small["hile_gpu"]="-C g"
 constraint_small["hile_cpu"]="-C c"
+constraint_small["lumi_2403"]="--partition=standard"
 
 #Memory flags for compiling, note that with --exclusive it is better to use --mem since --mem-per-cpu counts the whole node apparently
 declare -A mem_flags
@@ -42,6 +45,7 @@ mem_flags["ukko_dgx"]="--mem=64G"
 mem_flags["pioneer"]=""
 mem_flags["hile_gpu"]="--mem=32G"
 mem_flags["hile_cpu"]="--mem=32G"
+mem_flags["lumi_2403"]="--mem=32G"
 
 #Production compile flags
 declare -A compile_flags_prod
