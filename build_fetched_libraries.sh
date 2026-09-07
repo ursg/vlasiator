@@ -19,7 +19,7 @@ mkdir -p libraries${PLATFORM}/include
 mkdir -p libraries${PLATFORM}/lib
 
 CLI11HEADER="https://github.com/CLIUtils/CLI11/releases/download/v2.6.2/CLI11.hpp"
-wget $CLI11HEADER
+curl --output CLI11.hpp $CLI11HEADER
 CLI11SHA256="227a16fe5f9f8ada80c3c409492475536f597e7bd83a6c26eacc3c8c149a9295"
 CHECKSUM=$(sha256sum CLI11.hpp | grep -Po '^\w+')
 if [[ "$CLI11SHA256" != "$CHECKSUM" ]]; then 
