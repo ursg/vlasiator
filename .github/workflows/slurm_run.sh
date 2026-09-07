@@ -25,7 +25,7 @@ constraint["ukko_dgx"]="--constraint=ukko -p gpu"
 constraint["pioneer"]="-p pioneer -t 01:00:00" #not sure if pty needed for pioneer
 constraint["hile_gpu"]="-C g"
 constraint["hile_cpu"]="-C c"
-constraint["lumi_gnu_2403"]="--partition=standard"
+constraint["lumi_gnu_2403"]="--partition=standard  --account=project_462001599"
 
 #Constraints used for smaller jobs like compiling/removing files/catting etc
 declare -A constraint_small
