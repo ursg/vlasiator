@@ -25,7 +25,7 @@ constraint["ukko_dgx"]="--constraint=ukko -p gpu"
 constraint["pioneer"]="-p pioneer -t 01:00:00" #not sure if pty needed for pioneer
 constraint["hile_gpu"]="-C g"
 constraint["hile_cpu"]="-C c"
-constraint["lumi_2503"]="--partition=standard --account=project_462001599 -t 10:00:00"
+constraint["lumi_2503"]="--partition=standard --account=project_462001599 -t 01:00:00"
 
 #Constraints used for smaller jobs like compiling/removing files/catting etc
 declare -A constraint_small
@@ -34,7 +34,7 @@ constraint_small["ukko_dgx"]="--constraint=ukko"
 constraint_small["pioneer"]="-p pioneer -t 01:00:00"
 constraint_small["hile_gpu"]="-C g"
 constraint_small["hile_cpu"]="-C c"
-constraint_small["lumi_2503"]="--partition=standard --account=project_462001599 -t 01:00:00"
+constraint_small["lumi_2503"]="--partition=standard --account=project_462001599 -t 00:15:00"
 
 #Memory flags for compiling, note that with --exclusive it is better to use --mem since --mem-per-cpu counts the whole node apparently
 declare -A mem_flags
