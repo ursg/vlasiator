@@ -161,6 +161,13 @@ if [[ $1 == "FLUXTEST" ]]; then
   chmod +x $GITHUB_WORKSPACE/fluxfunction
   srun ${constraint_small[$VLASIATOR_ARCH]} --job-name CI_FLUXTEST -N 1 -c 1 --mem=2G -t 0:10:0 bash -c "$FLUXTEST_STRING"
 
-  diff -q equatorial.bin /turso/group/spacephysics/vlasiator/testpackage/CI_reference/equatorial.bin || if [ $? -eq 1 ]; then true; else false; fi
-  diff -q polar.bin /turso/group/spacephysics/vlasiator/testpackage/CI_reference/polar.bin || if [ $? -eq 1 ]; then true; else false; fi
+  #Platform specific expections can be added here
+  if [[ "$VLASIATOR_ARCH" == "lumi_2403" ]]; then
+    export CI_REFERENCE_LOCATION=/users/lrb_462001599_ci/testpackage/CI_reference/;
+  else
+    export CI_REFERENCE_LOCATION=/turso/group/spacephysics/vlasiator/testpackage/CI_reference/;
+  fi
+
+  diff -q equatorial.bin $CI_REFERENCE_LOCATION/equatorial.bin || if [ $? -eq 1 ]; then true; else false; fi
+  diff -q polar.bin      $CI_REFERENCE_LOCATION/polar.bin      || if [ $? -eq 1 ]; then true; else false; fi
 fi
