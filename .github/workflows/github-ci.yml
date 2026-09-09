@@ -102,6 +102,13 @@ jobs:
             run_tp: false
             debug: false
 
+          - name: lumi-c
+            runner: lumi
+            arch: lumi_2503
+            compile_tp: true
+            run_tp: true
+            debug: true
+
     runs-on: ${{ matrix.runner }}
     needs: get_git_diff
     if: github.repository_owner == 'fmihpc'

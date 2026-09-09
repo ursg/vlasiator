@@ -15,6 +15,7 @@ core_flags["ukko_dgx"]="-n 1 -c 64"
 core_flags["pioneer"]="-n 1 -c 64"
 core_flags["hile_gpu"]="-n 1 -c 16"
 core_flags["hile_cpu"]="-n 1 -c 16"
+core_flags["lumi_2503"]="-n 1 -c 16"
 
 #Constraints for compiling stuff
 declare -A constraint
@@ -24,6 +25,7 @@ constraint["ukko_dgx"]="--constraint=ukko -p gpu"
 constraint["pioneer"]="-p pioneer -t 01:00:00" #not sure if pty needed for pioneer
 constraint["hile_gpu"]="-C g"
 constraint["hile_cpu"]="-C c"
+constraint["lumi_2503"]="--partition=standard --account=project_462001599 -t 01:00:00"
 
 #Constraints used for smaller jobs like compiling/removing files/catting etc
 declare -A constraint_small
@@ -32,6 +34,7 @@ constraint_small["ukko_dgx"]="--constraint=ukko"
 constraint_small["pioneer"]="-p pioneer -t 01:00:00"
 constraint_small["hile_gpu"]="-C g"
 constraint_small["hile_cpu"]="-C c"
+constraint_small["lumi_2503"]="--partition=standard --account=project_462001599 -t 00:15:00"
 
 #Memory flags for compiling, note that with --exclusive it is better to use --mem since --mem-per-cpu counts the whole node apparently
 declare -A mem_flags
@@ -42,6 +45,7 @@ mem_flags["ukko_dgx"]="--mem=64G"
 mem_flags["pioneer"]=""
 mem_flags["hile_gpu"]="--mem=32G"
 mem_flags["hile_cpu"]="--mem=32G"
+mem_flags["lumi_2503"]="--mem=32G"
 
 #Production compile flags
 declare -A compile_flags_prod
@@ -113,7 +117,7 @@ fi
 #|         RUN TP               |
 #0++++++++++++++++++++++++++++++0
 if [[ $1 == "RUN_TP" ]]; then
-  if [[ "$VLASIATOR_ARCH" == "carrington_gcc_openmpi" || "$VLASIATOR_ARCH" == "hile_cpu" ]]; then
+  if [[ "$VLASIATOR_ARCH" == "carrington_gcc_openmpi" || "$VLASIATOR_ARCH" == "hile_cpu" || "$VLASIATOR_ARCH" == "lumi_2503" ]]; then
 
     #Platform specific expections can be added here
     if [[ "$VLASIATOR_ARCH" == "carrington_gcc_openmpi" ]]; then
@@ -157,6 +161,13 @@ if [[ $1 == "FLUXTEST" ]]; then
   chmod +x $GITHUB_WORKSPACE/fluxfunction
   srun ${constraint_small[$VLASIATOR_ARCH]} --job-name CI_FLUXTEST -N 1 -c 1 --mem=2G -t 0:10:0 bash -c "$FLUXTEST_STRING"
 
-  diff -q equatorial.bin /turso/group/spacephysics/vlasiator/testpackage/CI_reference/equatorial.bin || if [ $? -eq 1 ]; then true; else false; fi
-  diff -q polar.bin /turso/group/spacephysics/vlasiator/testpackage/CI_reference/polar.bin || if [ $? -eq 1 ]; then true; else false; fi
+  #Platform specific expections can be added here
+  if [[ "$VLASIATOR_ARCH" == "lumi_2503" ]]; then
+    export CI_REFERENCE_LOCATION=/projappl/project_462001599/testpackage/CI_reference/;
+  else
+    export CI_REFERENCE_LOCATION=/turso/group/spacephysics/vlasiator/testpackage/CI_reference/;
+  fi
+
+  diff -q equatorial.bin $CI_REFERENCE_LOCATION/equatorial.bin || if [ $? -eq 1 ]; then true; else false; fi
+  diff -q polar.bin      $CI_REFERENCE_LOCATION/polar.bin      || if [ $? -eq 1 ]; then true; else false; fi
 fi
