@@ -163,7 +163,7 @@ if [[ $1 == "FLUXTEST" ]]; then
 
   #Platform specific expections can be added here
   if [[ "$VLASIATOR_ARCH" == "lumi_2503" ]]; then
-    export CI_REFERENCE_LOCATION=/users/lrb_462001599_ci/testpackage/CI_reference/;
+    export CI_REFERENCE_LOCATION=/projappl/project_462001599/testpackage/CI_reference/;
   else
     export CI_REFERENCE_LOCATION=/turso/group/spacephysics/vlasiator/testpackage/CI_reference/;
   fi
