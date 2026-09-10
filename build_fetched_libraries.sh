@@ -175,6 +175,7 @@ echo "### Building ZFP. ###"
 cd zfp
 mkdir -p  build
 cd build
+export LDFLAGS="-openmp -lpthread"
 cmake .. -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM}
 cmake --build . --config Release -j ${PARALLEL}
 ZFP=$PWD
