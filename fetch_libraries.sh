@@ -67,6 +67,7 @@ if [[ $PLATFORM != "-leonardo_booster" && $PLATFORM != "-karolina_cuda" && $PLAT
     #tar xjf jemalloc-5.3.1.tar.bz2
     git clone --depth=1 https://github.com/jemalloc/jemalloc
     cd jemalloc
+    git fetch --tags origin 
     git_use_commit "$JEMALLOC_COMMIT"
     cd ..
 fi
