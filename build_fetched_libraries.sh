@@ -133,15 +133,15 @@ rm -rf zoltan-build
 mkdir zoltan-build
 cd zoltan-build
 if [[ $PLATFORM == "-pioneer" ]]; then
-    cmake ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON #--host=riscv64-unknown-linux-gnu --build=arm-linux-gnu
+    cmake ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Fortran=OFF -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON #--host=riscv64-unknown-linux-gnu --build=arm-linux-gnu
 elif [[ $PLATFORM == "-arm64" ]]; then
-    cmake ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON -DCMAKE_C_COMPILER=mpicc -DCMAKE_CXX_COMPILER=mpic++ #--build=arm-linux-gnu --host=arm-linux-gnu
+    cmake ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Fortran=OFF -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON -DCMAKE_C_COMPILER=mpicc -DCMAKE_CXX_COMPILER=mpic++ #--build=arm-linux-gnu --host=arm-linux-gnu
 elif [[ $PLATFORM == "-appleM1" || $PLATFORM == "-meluxina" ]]; then
-    cmake ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON -DCMAKE_C_COMPILER=mpicc -DCMAKE_CXX_COMPILER=mpic++ #CC=mpicc CXX=mpic++
+    cmake ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Fortran=OFF -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON -DCMAKE_C_COMPILER=mpicc -DCMAKE_CXX_COMPILER=mpic++ #CC=mpicc CXX=mpic++
 elif [[ $PLATFORM == "-frankenstein_hopper2_cuda" ||  $PLATFORM == "-roihu_gpu"  ]]; then
-    cmake ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON -DCMAKE_C_COMPILER=mpicc -DCMAKE_CXX_COMPILER=mpic++ #--build=aarch64-unknown-linux-gnu
+    cmake ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Fortran=OFF -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON -DCMAKE_C_COMPILER=mpicc -DCMAKE_CXX_COMPILER=mpic++ #--build=aarch64-unknown-linux-gnu
 elif [[ $PLATFORM == "-leonardo_dcgp_intel" ]]; then
-    cmake ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON -DCMAKE_C_COMPILER=mpicc -DCMAKE_CXX_COMPILER=mpic++ -DCMAKE_C_FLAGS:STRING="-cc=icx" -DCMAKE_CXX_FLAGS:STRING="-cxx=icpx"
+    cmake ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Fortran=OFF -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON -DCMAKE_C_COMPILER=mpicc -DCMAKE_CXX_COMPILER=mpic++ -DCMAKE_C_FLAGS:STRING="-cc=icx" -DCMAKE_CXX_FLAGS:STRING="-cxx=icpx"
 #    # Although configured with new compilers, the compilations ignores the -cc=icx and -cxx=icpx flags. Need to add them manually.
 #    sed -i 's/mpiicc/mpiicc -cc=icx/g' Makefile
 #    sed -i 's/mpiicc/mpiicc -cc=icx/g' src/Makefile
@@ -150,12 +150,12 @@ elif [[ $PLATFORM == "-leonardo_dcgp_intel" ]]; then
 #    sed -i 's/mpiicpc/mpiicpc -cxx=icpx/g' src/Makefile
 #    sed -i 's/mpiicpc/mpiicpc -cxx=icpx/g' src/driver/Makefile
 elif [[ $PLATFORM == "-hile_cpu" ||  $PLATFORM == "-hile_gpu" || $PLATFORM == "-lumi_2503" ]]; then
-    cmake ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON -DCMAKE_C_COMPILER=cc -DCMAKE_CXX_COMPILER=CC -DCMAKE_Fortran_COMPILER=ftn
+    cmake ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Fortran=OFF -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON -DCMAKE_C_COMPILER=cc -DCMAKE_CXX_COMPILER=CC -DCMAKE_Fortran_COMPILER=ftn
 elif [[ $PLATFORM == "-roihu_cpu_aocc" ]]; then
     /projappl/project_2001659/pfaukemp/CPU/vlasiator-libraries/libraries-roihu_cpu/bin/cmake \
-    ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON -DCMAKE_C_COMPILER=mpicc -DCMAKE_CXX_COMPILER=mpic++ -DCMAKE_C_FLAGS:STRING="-fPIC" -DCMAKE_CXX_FLAGS:STRING="-fPIC"
+    ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Fortran=OFF -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON -DCMAKE_C_COMPILER=mpicc -DCMAKE_CXX_COMPILER=mpic++ -DCMAKE_C_FLAGS:STRING="-fPIC" -DCMAKE_CXX_FLAGS:STRING="-fPIC"
 else
-    cmake ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON -DCMAKE_C_COMPILER=mpicc -DCMAKE_CXX_COMPILER=mpic++
+    cmake ../Trilinos -DCMAKE_INSTALL_PREFIX=$WORKSPACE/libraries${PLATFORM} -DTPL_ENABLE_MPI=ON -DTrilinos_ENABLE_Fortran=OFF -DTrilinos_ENABLE_Zoltan=ON -DZoltan_ENABLE_ULLONG_IDS:Bool=ON -DCMAKE_C_COMPILER=mpicc -DCMAKE_CXX_COMPILER=mpic++
 fi
 make clean
 make -j $PARALLEL && make install
