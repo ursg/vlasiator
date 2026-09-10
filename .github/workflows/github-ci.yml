@@ -231,7 +231,7 @@ jobs:
         name: Install build dependencies
         run: |
           apt-get update
-          apt-get install -y g++ build-essential cmake make libopenmpi-dev openmpi-bin zstd
+          apt-get install -y g++ build-essential cmake make libopenmpi-dev openmpi-bin zstd gfortran-15
       - name: Run library build script
         run: ./fetch_and_build_libraries.sh
       - name: Build libraries tar
