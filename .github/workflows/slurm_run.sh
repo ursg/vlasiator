@@ -45,7 +45,7 @@ mem_flags["ukko_dgx"]="--mem=64G"
 mem_flags["pioneer"]=""
 mem_flags["hile_gpu"]="--mem=32G"
 mem_flags["hile_cpu"]="--mem=32G"
-mem_flags["lumi_2503"]="--mem=32G"
+mem_flags["lumi_2503"]="--mem=220G"
 
 #Production compile flags
 declare -A compile_flags_prod
@@ -142,7 +142,7 @@ ls -halB testpackage_check_description.txt
 tar -czf testpackage-output-$VLASIATOR_ARCH.tar.gz testpackage_check_description.txt testpackage_output_variables.txt
 MORO
     )
-    srun --job-name CI_package_results ${constraint_small[$VLASIATOR_ARCH]} -N 1 -c 1 --mem=3G bash -c "$PARSE_OUTPUT_CMD"
+    srun --job-name CI_package_results ${constraint_small[$VLASIATOR_ARCH]} -N 1 -n 1 -c 1 --mem=3G bash -c "$PARSE_OUTPUT_CMD"
     if [ -f $GITHUB_WORKSPACE/testpackage_failed ]; then
       # Fail this step if any test failed.
       exit 1
@@ -159,7 +159,7 @@ fi
 if [[ $1 == "FLUXTEST" ]]; then
   FLUXTEST_STRING="$modules ; $GITHUB_WORKSPACE/fluxfunction testpackage/run_*/Magnetosphere_small/bulk.0000001.vlsv equatorial.bin ; $GITHUB_WORKSPACE/fluxfunction testpackage/run_*/Magnetosphere_polar_small/bulk.0000001.vlsv polar.bin"
   chmod +x $GITHUB_WORKSPACE/fluxfunction
-  srun ${constraint_small[$VLASIATOR_ARCH]} --job-name CI_FLUXTEST -N 1 -c 1 --mem=2G -t 0:10:0 bash -c "$FLUXTEST_STRING"
+  srun ${constraint_small[$VLASIATOR_ARCH]} --job-name CI_FLUXTEST -N 1 -n 1 -c 1 --mem=2G -t 0:10:0 bash -c "$FLUXTEST_STRING"
 
   #Platform specific expections can be added here
   if [[ "$VLASIATOR_ARCH" == "lumi_2503" ]]; then
