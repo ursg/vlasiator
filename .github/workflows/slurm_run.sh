@@ -91,7 +91,7 @@ fi
 #0++++++++++++++++++++++++++++++0
 if [[ $1 == "BUILD_TOOLS" ]]; then
   #not constraint small since some platforms used gpu partition here but not build libs previously
-  srun ${constraint[$VLASIATOR_ARCH]} --job-name CI_TOOLS_COMPILE --interactive --nodes=1 -n 1 -c 1 --mem=4G -t 0:10:0 bash -lc "$modules ; make vlsvextract vlsvdiff fluxfunction ; sleep 10s"
+  srun ${constraint[$VLASIATOR_ARCH]} --job-name CI_TOOLS_COMPILE --interactive --nodes=1 -n 1 -c 1 --mem=4G -t 0:10:0 bash -lc "$modules ; make vlsvextract vlsvdiff fluxfunction ; RC=$?; sleep 10s; exit $RC"
   exit $?
 fi
 
@@ -101,7 +101,7 @@ COMPILE_STRING="$modules ; make -j $(echo ${core_flags[$VLASIATOR_ARCH]} | grep 
 #|         COMPILE PROD         |
 #0++++++++++++++++++++++++++++++0
 if [[ $1 == "COMPILE_PROD" ]]; then
-  srun ${constraint[$VLASIATOR_ARCH]} --job-name CI_PROD_COMPILE --interactive ${mem_flags[$VLASIATOR_ARCH]} ${core_flags[$VLASIATOR_ARCH]} -t 0:30:0 bash -lc "${compile_flags_prod[$VLASIATOR_ARCH]} $COMPILE_STRING ; sleep 10s"
+  srun ${constraint[$VLASIATOR_ARCH]} --job-name CI_PROD_COMPILE --interactive ${mem_flags[$VLASIATOR_ARCH]} ${core_flags[$VLASIATOR_ARCH]} -t 0:30:0 bash -lc "${compile_flags_prod[$VLASIATOR_ARCH]} $COMPILE_STRING ; RC=$?; sleep 10s; exit $RC"
   exit $?
 fi
 
@@ -109,7 +109,7 @@ fi
 #|         COMPILE TP           |
 #0++++++++++++++++++++++++++++++0
 if [[ $1 == "COMPILE_TP" ]]; then
-  srun ${constraint[$VLASIATOR_ARCH]} --job-name CI_TP_COMPILE --interactive ${mem_flags[$VLASIATOR_ARCH]} ${core_flags[$VLASIATOR_ARCH]} -t 0:30:0 bash -lc "${compile_flags_tp[$VLASIATOR_ARCH]} $COMPILE_STRING testpackage ; sleep 10s"
+  srun ${constraint[$VLASIATOR_ARCH]} --job-name CI_TP_COMPILE --interactive ${mem_flags[$VLASIATOR_ARCH]} ${core_flags[$VLASIATOR_ARCH]} -t 0:30:0 bash -lc "${compile_flags_tp[$VLASIATOR_ARCH]} $COMPILE_STRING testpackage ; RC=$?; sleep 10s; exit $RC"
   exit $?
 fi
 
