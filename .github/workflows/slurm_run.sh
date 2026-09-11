@@ -45,7 +45,7 @@ mem_flags["ukko_dgx"]="--mem=64G"
 mem_flags["pioneer"]=""
 mem_flags["hile_gpu"]="--mem=32G"
 mem_flags["hile_cpu"]="--mem=32G"
-mem_flags["lumi_2503"]="--mem=32G"
+mem_flags["lumi_2503"]="--mem=220G"
 
 #Production compile flags
 declare -A compile_flags_prod
@@ -91,7 +91,7 @@ fi
 #0++++++++++++++++++++++++++++++0
 if [[ $1 == "BUILD_TOOLS" ]]; then
   #not constraint small since some platforms used gpu partition here but not build libs previously
-  srun ${constraint[$VLASIATOR_ARCH]} --job-name CI_TOOLS_COMPILE --interactive --nodes=1 -n 1 -c 1 --mem=4G -t 0:10:0 bash -c "$modules ; make vlsvextract vlsvdiff fluxfunction ; sleep 10s"
+  srun ${constraint[$VLASIATOR_ARCH]} --job-name CI_TOOLS_COMPILE --interactive --nodes=1 -n 1 -c 1 --mem=4G -t 0:10:0 bash -lc "$modules ; make vlsvextract vlsvdiff fluxfunction ; RC=$?; sleep 10s; exit $RC"
   exit $?
 fi
 
@@ -101,7 +101,7 @@ COMPILE_STRING="$modules ; make -j $(echo ${core_flags[$VLASIATOR_ARCH]} | grep 
 #|         COMPILE PROD         |
 #0++++++++++++++++++++++++++++++0
 if [[ $1 == "COMPILE_PROD" ]]; then
-  srun ${constraint[$VLASIATOR_ARCH]} --job-name CI_PROD_COMPILE --interactive ${mem_flags[$VLASIATOR_ARCH]} ${core_flags[$VLASIATOR_ARCH]} -t 0:10:0 bash -c "${compile_flags_prod[$VLASIATOR_ARCH]} $COMPILE_STRING ; sleep 10s"
+  srun ${constraint[$VLASIATOR_ARCH]} --job-name CI_PROD_COMPILE --interactive ${mem_flags[$VLASIATOR_ARCH]} ${core_flags[$VLASIATOR_ARCH]} -t 0:30:0 bash -lc "${compile_flags_prod[$VLASIATOR_ARCH]} $COMPILE_STRING ; RC=$?; sleep 10s; exit $RC"
   exit $?
 fi
 
@@ -109,7 +109,7 @@ fi
 #|         COMPILE TP           |
 #0++++++++++++++++++++++++++++++0
 if [[ $1 == "COMPILE_TP" ]]; then
-  srun ${constraint[$VLASIATOR_ARCH]} --job-name CI_TP_COMPILE --interactive ${mem_flags[$VLASIATOR_ARCH]} ${core_flags[$VLASIATOR_ARCH]} -t 0:10:0 bash -c "${compile_flags_tp[$VLASIATOR_ARCH]} $COMPILE_STRING testpackage ; sleep 10s"
+  srun ${constraint[$VLASIATOR_ARCH]} --job-name CI_TP_COMPILE --interactive ${mem_flags[$VLASIATOR_ARCH]} ${core_flags[$VLASIATOR_ARCH]} -t 0:30:0 bash -lc "${compile_flags_tp[$VLASIATOR_ARCH]} $COMPILE_STRING testpackage ; RC=$?; sleep 10s; exit $RC"
   exit $?
 fi
 
@@ -142,7 +142,7 @@ ls -halB testpackage_check_description.txt
 tar -czf testpackage-output-$VLASIATOR_ARCH.tar.gz testpackage_check_description.txt testpackage_output_variables.txt
 MORO
     )
-    srun --job-name CI_package_results ${constraint_small[$VLASIATOR_ARCH]} -N 1 -c 1 --mem=3G bash -c "$PARSE_OUTPUT_CMD"
+    srun --job-name CI_package_results ${constraint_small[$VLASIATOR_ARCH]} -N 1 -n 1 -c 1 --mem=3G bash -c "$PARSE_OUTPUT_CMD"
     if [ -f $GITHUB_WORKSPACE/testpackage_failed ]; then
       # Fail this step if any test failed.
       exit 1
@@ -159,7 +159,7 @@ fi
 if [[ $1 == "FLUXTEST" ]]; then
   FLUXTEST_STRING="$modules ; $GITHUB_WORKSPACE/fluxfunction testpackage/run_*/Magnetosphere_small/bulk.0000001.vlsv equatorial.bin ; $GITHUB_WORKSPACE/fluxfunction testpackage/run_*/Magnetosphere_polar_small/bulk.0000001.vlsv polar.bin"
   chmod +x $GITHUB_WORKSPACE/fluxfunction
-  srun ${constraint_small[$VLASIATOR_ARCH]} --job-name CI_FLUXTEST -N 1 -c 1 --mem=2G -t 0:10:0 bash -c "$FLUXTEST_STRING"
+  srun ${constraint_small[$VLASIATOR_ARCH]} --job-name CI_FLUXTEST -N 1 -n 1 -c 1 --mem=2G -t 0:10:0 bash -lc "$FLUXTEST_STRING"
 
   #Platform specific expections can be added here
   if [[ "$VLASIATOR_ARCH" == "lumi_2503" ]]; then
