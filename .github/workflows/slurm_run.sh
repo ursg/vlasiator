@@ -34,7 +34,7 @@ lib_flags["lumi_2503"]="-n 1 -c 16 --mem=64G"
 #Constraints for compiling stuff
 declare -A constraint
 constraint["turso-amd_GNU_MPICH"]="--constraint=amd"
-constraint["ukko_dgx"]="--constraint=amd -G 1"  # "Give me a GPU, whichever it may be"
+constraint["ukko_dgx"]="--constraint=amd,A100 -G 1"  # "Give me a GPU, one that has a compiler for it"
 constraint["pioneer"]="-p pioneer -t 01:00:00" #not sure if pty needed for pioneer
 constraint["hile_gpu"]="-C g"
 constraint["hile_cpu"]="-C c"
@@ -43,7 +43,7 @@ constraint["lumi_2503"]="--partition=standard --account=project_462001599 -t 01:
 #Constraints used for smaller jobs like compiling/removing files/catting etc
 declare -A constraint_small
 constraint_small["turso-amd_GNU_MPICH"]="--constraint=amd"
-constraint_small["ukko_dgx"]="--constraint=amd"
+constraint_small["ukko_dgx"]="--constraint=amd,A100"
 constraint_small["pioneer"]="-p pioneer -t 01:00:00"
 constraint_small["hile_gpu"]="-C g"
 constraint_small["hile_cpu"]="-C c"
