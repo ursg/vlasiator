@@ -25,7 +25,7 @@ diffbin="$GITHUB_WORKSPACE/vlsvdiff_DP"
 
 #compare agains which revision
 reference_revision="CI_reference"
-source ${GITHUB_WORKSPACE}/modules/$(VLASIATOR_ARCH).sh
+source ${GITHUB_WORKSPACE}/modules/$VLASIATOR_ARCH.sh
 
 #module load xthi
 # export UCX_NET_DEVICES=eth5,mlx5_0:1 # This is important for multi-node performance!
@@ -52,9 +52,9 @@ export OMPI_MCA_io="^ompio"
 export MALLOC_CONF="abort_conf:true"
 
 #command for running stuff
-run_command="srun --mpi=pmix_v3 -n $SLURM_NTASKS "
-small_run_command="srun --mpi=pmix_v3 -n 1"
-run_command_tools="mpirun -np 1 "
+run_command="srun --mpi=pmix -n $SLURM_NTASKS "
+small_run_command="srun --mpi=pmix -n 1"
+run_command_tools="srun -n 1 "
 
 umask 007
 # Launch the OpenMP job to the allocated compute node

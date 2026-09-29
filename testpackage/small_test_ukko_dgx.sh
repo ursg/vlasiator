@@ -38,7 +38,7 @@ export tasks=$SLURM_NTASKS
 #command for running stuff
 run_command="srun --mpi=pmix -c $t -n $tasks"
 small_run_command="srun --mpi=pmix -c $t -n 1"
-run_command_tools="mpirun -n 1 -N 1"
+run_command_tools="srun -n 1"
 
 # Informational / debugging placement outputs
 #
